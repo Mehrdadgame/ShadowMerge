@@ -8,8 +8,8 @@ public class ShadowProjector : MonoBehaviour
     public Material shadowMaterial;
     public LayerMask mergeDetectionLayer = -1;
 
-    private GameObject shadowMesh;
-    private MeshRenderer shadowRenderer;
+    public GameObject shadowMesh;
+    public MeshRenderer shadowRenderer;
     private bool isMerged = false;
     private Vector3 lastSunPosition;
 
@@ -23,12 +23,11 @@ public class ShadowProjector : MonoBehaviour
     {
         shadowMesh = new GameObject("Shadow_" + gameObject.name);
         shadowMesh.transform.parent = transform;
-        shadowMesh.layer = LayerMask.NameToLayer("Default"); // Changed from Shadow layer
+        shadowMesh.layer = 8; // Shadow layer (باید در Project Settings تعریف شده باشد)
 
         MeshFilter meshFilter = shadowMesh.AddComponent<MeshFilter>();
         shadowRenderer = shadowMesh.AddComponent<MeshRenderer>();
 
-        // Create default shadow material if none provided
         if (shadowMaterial == null)
         {
             shadowMaterial = CreateDefaultShadowMaterial();
@@ -37,16 +36,34 @@ public class ShadowProjector : MonoBehaviour
         shadowRenderer.material = shadowMaterial;
         shadowRenderer.sortingOrder = -1;
 
-        // Add collider for shadow detection
+        // FIXED: Collider بهبود یافته
         BoxCollider shadowCollider = shadowMesh.AddComponent<BoxCollider>();
         shadowCollider.isTrigger = true;
-        shadowCollider.size = new Vector3(shadowWidth, 0.1f, shadowLength);
-        shadowCollider.center = new Vector3(0, 0, shadowLength / 2);
+        shadowCollider.size = new Vector3(shadowWidth * 1.2f, 0.2f, shadowLength * 1.1f); // Slightly larger
+        shadowCollider.center = new Vector3(0, 0.1f, shadowLength / 2);
 
-        // Create quad mesh for shadow
+        // Tag مخصوص shadow
+        shadowMesh.tag = "Shadow";
+
         meshFilter.mesh = CreateQuadMesh();
     }
+    public bool IsPointInShadowImproved(Vector3 point)
+    {
+        if (shadowMesh == null || shadowRenderer == null) return false;
 
+        // روش ۱: Bounds check با tolerance بیشتر
+        Bounds shadowBounds = shadowRenderer.bounds;
+        shadowBounds.Expand(0.5f); // Increased tolerance
+
+        if (!shadowBounds.Contains(point)) return false;
+
+        // روش ۲: Local space check (دقیق‌تر)
+        Vector3 localPoint = shadowMesh.transform.InverseTransformPoint(point);
+
+        return (localPoint.x >= -shadowWidth / 2 - 0.2f && localPoint.x <= shadowWidth / 2 + 0.2f &&
+                localPoint.z >= -0.2f && localPoint.z <= shadowLength + 0.2f &&
+                localPoint.y >= -0.5f && localPoint.y <= 0.5f);
+    }
     Material CreateDefaultShadowMaterial()
     {
         Material mat = new Material(Shader.Find("Standard"));

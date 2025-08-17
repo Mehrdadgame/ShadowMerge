@@ -73,7 +73,7 @@ public class GameManager : MonoBehaviour
         gameActive = true;
         gameStarted = true;
 
-        StartCoroutine(GameLoop());
+        GameLoop();
     }
 
     IEnumerator GameLoop()
@@ -86,14 +86,44 @@ public class GameManager : MonoBehaviour
             {
                 currentTime -= Time.deltaTime;
 
-                // بررسی وضعیت سایه
-                bool inShadowNow = waterDrop != null ? waterDrop.IsInShadow() : false;
+                // بررسی وضعیت سایه - FIXED
+                bool inShadowNow = false;
 
-                // محاسبه قدرت سایه برای کم کردن تدریجی
-                float shadowStrength = GetShadowStrength();
-                float decayRate = Mathf.Lerp(sunlightDecayRate, waterDecayRate, shadowStrength);
+                // اگر از DropPathFollower استفاده می‌کنید:
+                DropPathFollower pathFollower = waterDrop?.GetComponent<DropPathFollower>();
+                if (pathFollower != null)
+                {
+                    inShadowNow = pathFollower.IsInShadow();
+                }
+                // یا اگر هنوز از WaterDrop استفاده می‌کنید:
+                else if (waterDrop != null)
+                {
+                    inShadowNow = waterDrop.IsInShadow();
+                }
 
-                currentWater -= decayRate * Time.deltaTime;
+                // محاسبه Decay - منطق اصلاح شده
+                if (inShadowNow)
+                {
+                    // در سایه: decay کمتر یا صفر
+                    float shadowProtection = GetShadowStrength();
+                    float protectedDecayRate = waterDecayRate * (1f - shadowProtection);
+                    currentWater -= protectedDecayRate * Time.deltaTime;
+
+                    if (Time.time % 1f < 0.1f) // Debug هر 1 ثانیه
+                    {
+                        Debug.Log($"🛡️ IN SHADOW - Protection: {shadowProtection * 100:F0}% - Decay: {protectedDecayRate:F1}/s");
+                    }
+                }
+                else
+                {
+                    // در نور خورشید: decay سریع
+                    currentWater -= sunlightDecayRate * Time.deltaTime;
+
+                    if (Time.time % 1f < 0.1f) // Debug هر 1 ثانیه
+                    {
+                        Debug.Log($"☀️ IN SUNLIGHT - Fast Decay: {sunlightDecayRate:F1}/s");
+                    }
+                }
 
                 // افکت تبخیر وقتی از سایه خارج می‌شود
                 if (wasInShadowLastFrame && !inShadowNow)
@@ -122,8 +152,16 @@ public class GameManager : MonoBehaviour
                     }
                 }
 
-                // بررسی شرایط برد
-                if (waterDrop != null && levelEndPoint != null)
+                // بررسی شرایط برد - اگر از Path System استفاده می‌کنید
+                DropPathFollower follower = waterDrop?.GetComponent<DropPathFollower>();
+                if (follower != null && !follower.IsMoving())
+                {
+                    // قطره به پایان مسیر رسیده
+                    WinLevel();
+                    yield break;
+                }
+                // یا روش قدیمی:
+                else if (waterDrop != null && levelEndPoint != null)
                 {
                     if (Vector3.Distance(waterDrop.transform.position, levelEndPoint.position) < 1f)
                     {
@@ -152,13 +190,23 @@ public class GameManager : MonoBehaviour
     {
         if (waterDrop == null) return 0f;
 
+        // اگر از DropPathFollower استفاده می‌کنید:
+        DropPathFollower pathFollower = waterDrop.GetComponent<DropPathFollower>();
+        if (pathFollower != null)
+        {
+            ShadowProjector currenttShadow = pathFollower.GetCurrentShadow();
+            if (currenttShadow == null) return 0f;
+            return currenttShadow.GetShadowStrength(waterDrop.transform.position);
+        }
+
+        // روش قدیمی:
         ShadowProjector currentShadow = waterDrop.GetCurrentShadow();
         if (currentShadow == null) return 0f;
 
         return currentShadow.GetShadowStrength(waterDrop.transform.position);
     }
 
-    void WinLevel()
+    public void WinLevel()
     {
         gameActive = false;
         float completionTime = Time.time - levelStartTime;
@@ -180,7 +228,6 @@ public class GameManager : MonoBehaviour
 
         Debug.Log($"🎉 مرحله برنده شد در {completionTime:F1} ثانیه با {currentWater:F0}% آب!");
     }
-
     void LoseLevel(string reason)
     {
         gameActive = false;

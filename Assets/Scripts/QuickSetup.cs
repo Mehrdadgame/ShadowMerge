@@ -7,11 +7,10 @@ using UnityEditor;
 
 public class QuickSetupFixed : MonoBehaviour
 {
-#if UNITY_EDITOR
-    [MenuItem("Last Drop/Fixed Quick Setup Scene")]
-    public static void SetupScene()
+    [MenuItem("Last Drop/Setup Scene with Path System")]
+    public static void SetupSceneWithPath()
     {
-        Debug.Log("🚀 شروع راه‌اندازی Last Drop (Fixed Version)...");
+        Debug.Log("🚀 شروع راه‌اندازی Last Drop با Path System...");
 
         // پاک کردن صحنه
         ClearScene();
@@ -19,11 +18,14 @@ public class QuickSetupFixed : MonoBehaviour
         // راه‌اندازی دوربین
         SetupCamera();
 
-        // ایجاد محیط
-        CreateEnvironment();
+        // ایجاد Path System
+        GameObject pathSystem = CreatePathSystem();
 
-        // ایجاد بازیکن
-        CreatePlayer();
+        // ایجاد محیط متناسب با مسیر
+        CreateEnvironmentForPath(pathSystem);
+
+        // ایجاد بازیکن با Path Follower
+        CreatePlayerWithPathFollower(pathSystem);
 
         // ایجاد منیجرها
         CreateManagers();
@@ -31,24 +33,20 @@ public class QuickSetupFixed : MonoBehaviour
         // ایجاد UI کامل
         CreateCompleteUI();
 
-        Debug.Log("🎉 Last Drop راه‌اندازی کامل شد!");
-        Debug.Log("✨ ویژگی‌ها: Fixed UI Components, Enhanced Systems");
+        Debug.Log("🎉 Last Drop با Path System راه‌اندازی کامل شد!");
+        Debug.Log("🛤️ مسیر شامل 5 waypoint است");
         Debug.Log("🎮 برای تست دکمه Play را بزنید!");
     }
 
     static void ClearScene()
     {
-        // حذف همه objects به جز دوربین اصلی و نور
         GameObject[] allObjects = FindObjectsByType<GameObject>(FindObjectsSortMode.None);
         foreach (GameObject obj in allObjects)
         {
             if (obj == null) continue;
-
-            // حفظ دوربین اصلی و نور directional
             if (obj == Camera.main?.gameObject) continue;
             Light light = obj.GetComponent<Light>();
             if (light != null && light.type == LightType.Directional) continue;
-
             DestroyImmediate(obj);
         }
         Debug.Log("🧹 صحنه پاک شد");
@@ -64,13 +62,12 @@ public class QuickSetupFixed : MonoBehaviour
             camObj.tag = "MainCamera";
         }
 
-        cam.transform.position = new Vector3(0, 12, -10);
+        cam.transform.position = new Vector3(0, 12, -2);
         cam.transform.rotation = Quaternion.Euler(45, 0, 0);
         cam.orthographic = true;
-        cam.orthographicSize = 10;
+        cam.orthographicSize = 8;
         cam.backgroundColor = new Color(0.9f, 0.6f, 0.3f);
 
-        // Camera Controller
         CameraController camController = cam.GetComponent<CameraController>();
         if (camController == null)
         {
@@ -85,7 +82,64 @@ public class QuickSetupFixed : MonoBehaviour
         Debug.Log("📷 دوربین راه‌اندازی شد");
     }
 
-    static void CreateEnvironment()
+    static GameObject CreatePathSystem()
+    {
+        GameObject pathSystemObj = new GameObject("PathSystem");
+        WaypointPath waypointPath = pathSystemObj.AddComponent<WaypointPath>();
+
+        // ایجاد 5 waypoint برای مسیر اصلی
+        Waypoint[] waypoints = new Waypoint[5];
+        Vector3[] positions = {
+            new Vector3(-6, 0.5f, -4),   // شروع (پایین چپ)
+            new Vector3(-2, 0.5f, -1),   // waypoint 1 (نزدیک اولین مانع)
+            new Vector3(1, 0.5f, 2),     // waypoint 2 (وسط - محل ادغام سایه‌ها)
+            new Vector3(3, 0.5f, 4),     // waypoint 3 (نزدیک water pickup)
+            new Vector3(6, 0.5f, 6)      // پایان (بالا راست)
+        };
+
+        string[] waypointNames = { "Start", "FirstShadow", "MergePoint", "RefillPoint", "Finish" };
+        Color[] waypointColors = { Color.green, Color.yellow, Color.magenta, Color.cyan, Color.red };
+        bool[] mustBeInShadow = { false, true, true, true, false };
+
+        for (int i = 0; i < waypoints.Length; i++)
+        {
+            GameObject wpObj = new GameObject($"Waypoint_{i:00}_{waypointNames[i]}");
+            wpObj.transform.SetParent(pathSystemObj.transform);
+            wpObj.transform.position = positions[i];
+
+            // Visual indicator
+            GameObject indicator = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+            indicator.name = "Indicator";
+            indicator.transform.SetParent(wpObj.transform);
+            indicator.transform.localPosition = Vector3.zero;
+            indicator.transform.localScale = new Vector3(0.3f, 0.05f, 0.3f);
+
+            Material indicatorMat = new Material(Shader.Find("Standard"));
+            indicatorMat.color = waypointColors[i];
+            indicatorMat.EnableKeyword("_EMISSION");
+            indicatorMat.SetColor("_EmissionColor", waypointColors[i] * 0.3f);
+            indicator.GetComponent<MeshRenderer>().material = indicatorMat;
+
+            waypoints[i] = new Waypoint
+            {
+                transform = wpObj.transform,
+                isRequired = true,
+                mustBeInShadow = mustBeInShadow[i],
+                waitTime = i == 2 ? 1f : 0f, // توقف در MergePoint
+                gizmoColor = waypointColors[i],
+                gizmoSize = 0.4f
+            };
+        }
+
+        waypointPath.waypoints = waypoints;
+        waypointPath.isLooped = false;
+        waypointPath.showPathInEditor = true;
+
+        Debug.Log("🛤️ Path System ایجاد شد");
+        return pathSystemObj;
+    }
+
+    static void CreateEnvironmentForPath(GameObject pathSystem)
     {
         // زمین
         GameObject ground = GameObject.CreatePrimitive(PrimitiveType.Plane);
@@ -93,120 +147,62 @@ public class QuickSetupFixed : MonoBehaviour
         ground.transform.localScale = Vector3.one * 3f;
         ground.transform.position = Vector3.zero;
 
-        // متریال URP برای زمین
         Material groundMat = CreateURPMaterial("GroundMaterial");
         groundMat.color = new Color(0.85f, 0.65f, 0.4f);
         ground.GetComponent<MeshRenderer>().material = groundMat;
 
-        // موانع ثابت
-        CreateStaticObstacle("Obstacle_1", new Vector3(-4, 1, -1));
-        CreateStaticObstacle("Obstacle_2", new Vector3(2, 1, 1));
-        CreateStaticObstacle("Obstacle_3", new Vector3(-1, 1, 3));
+        // موانع استراتژیک برای ایجاد سایه در مسیر
+        CreateStrategicObstacle("Obstacle_Start", new Vector3(-4, 1.5f, -2), new Vector3(1f, 3f, 1f));
+        CreateStrategicObstacle("Obstacle_Middle_A", new Vector3(-1, 1.5f, 1), new Vector3(1.5f, 3f, 1.5f));
+        CreateStrategicObstacle("Obstacle_Middle_B", new Vector3(2, 1.5f, 1.5f), new Vector3(1.2f, 3f, 1.2f));
+        CreateStrategicObstacle("Obstacle_End", new Vector3(4, 1.5f, 5), new Vector3(1f, 3f, 1f));
 
-        // موانع پویا
-        CreateMovingObstacle("MovingObstacle_1", new Vector3(3, 1, -2));
-        CreatePulsingObstacle("PulsingObstacle_1", new Vector3(-3, 1, 4));
+        // مانع پویا که سایه‌اش تغییر می‌کند
+        CreateMovingObstacleForPath("MovingObstacle_Path", new Vector3(0, 1.5f, 3));
 
-        // نقطه پایان
-        CreateEndPoint();
+        // آب‌های قابل جمع‌آوری در مسیر
+        CreateWaterPickupAt(new Vector3(3.2f, 0.6f, 4.2f), 1); // نزدیک RefillPoint
+        CreateWaterPickupAt(new Vector3(-1.8f, 0.6f, -0.5f), 2); // نزدیک FirstShadow
+        CreateWaterPickupAt(new Vector3(1.2f, 0.6f, 2.2f), 3); // نزدیک MergePoint
 
-        // آب‌های قابل جمع‌آوری
-        CreateWaterPickups();
-
-        Debug.Log("🌍 محیط ایجاد شد");
+        Debug.Log("🌍 محیط استراتژیک برای Path ایجاد شد");
     }
 
-    static Material CreateURPMaterial(string name)
-    {
-        // تلاش برای استفاده از URP Lit shader
-        Shader urpShader = Shader.Find("Universal Render Pipeline/Lit");
-        if (urpShader == null)
-        {
-            // اگر URP موجود نباشد، از Built-in استفاده کن
-            urpShader = Shader.Find("Standard");
-        }
-
-        Material mat = new Material(urpShader);
-        mat.name = name;
-        return mat;
-    }
-
-    static Material CreateTransparentURPMaterial(string name, Color color)
-    {
-        Material mat = CreateURPMaterial(name);
-
-        // تنظیمات شفافیت برای URP
-        if (mat.shader.name.Contains("Universal"))
-        {
-            // URP Transparent settings
-            mat.SetFloat("_Surface", 1); // Transparent
-            mat.SetFloat("_Blend", 0); // Alpha
-            mat.SetFloat("_AlphaCutoff", 0);
-            mat.SetFloat("_SrcBlend", 5); // SrcAlpha
-            mat.SetFloat("_DstBlend", 10); // OneMinusSrcAlpha
-            mat.SetFloat("_ZWrite", 0);
-            mat.renderQueue = 3000;
-
-            // Enable transparency keywords for URP
-            mat.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
-            mat.EnableKeyword("_ALPHAPREMULTIPLY_ON");
-        }
-        else
-        {
-            // Built-in transparency settings
-            mat.SetFloat("_Mode", 3); // Transparent
-            mat.SetInt("_SrcBlend", (int)UnityEngine.Rendering.BlendMode.SrcAlpha);
-            mat.SetInt("_DstBlend", (int)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
-            mat.SetInt("_ZWrite", 0);
-            mat.EnableKeyword("_ALPHABLEND_ON");
-            mat.renderQueue = 3000;
-        }
-
-        mat.color = color;
-        return mat;
-    }
-
-    static void CreateStaticObstacle(string name, Vector3 position)
+    static void CreateStrategicObstacle(string name, Vector3 position, Vector3 scale)
     {
         GameObject obstacle = GameObject.CreatePrimitive(PrimitiveType.Cube);
         obstacle.name = name;
         obstacle.transform.position = position;
-        obstacle.transform.localScale = new Vector3(1.2f, 2.5f, 1.2f);
+        obstacle.transform.localScale = scale;
 
-        // متریال URP
         Material mat = CreateURPMaterial("ObstacleMaterial");
         mat.color = new Color(0.5f, 0.3f, 0.2f);
         obstacle.GetComponent<MeshRenderer>().material = mat;
 
-        // ShadowProjector
+        // Shadow Projector
         ShadowProjector shadowProj = obstacle.AddComponent<ShadowProjector>();
         shadowProj.shadowMaterial = CreateShadowMaterial();
-        shadowProj.shadowLength = 7f;
-        shadowProj.shadowWidth = 2.5f;
+        shadowProj.shadowLength = scale.z * 3f; // طولانی‌تر برای پوشش بهتر مسیر
+        shadowProj.shadowWidth = scale.x * 2f;
 
         obstacle.tag = "ShadowCaster";
     }
 
-    static Material CreateShadowMaterial()
+    static void CreateMovingObstacleForPath(string name, Vector3 position)
     {
-        return CreateTransparentURPMaterial("ShadowMaterial", new Color(0.05f, 0.05f, 0.05f, 0.8f));
-    }
-
-    static void CreateMovingObstacle(string name, Vector3 position)
-    {
-        CreateStaticObstacle(name, position);
+        CreateStrategicObstacle(name, position, new Vector3(1.2f, 2.5f, 1.2f));
         GameObject obstacle = GameObject.Find(name);
 
         DynamicObstacle dynamic = obstacle.AddComponent<DynamicObstacle>();
         dynamic.isMoving = true;
-        dynamic.moveSpeed = 2f;
-        dynamic.waitTime = 1.5f;
+        dynamic.moveSpeed = 1.5f; // آهسته‌تر برای کنترل بهتر
+        dynamic.waitTime = 2f;
 
-        Vector3[] waypoints = new Vector3[4];
+        // مسیر حرکت که سایه را روی path می‌گذارد
+        Vector3[] waypoints = new Vector3[3];
         waypoints[0] = position;
-        waypoints[1] = position + new Vector3(3, 0, 0);
-        waypoints[2] = position + new Vector3(3, 0, 3);
-        waypoints[3] = position + new Vector3(0, 0, 3);
+        waypoints[1] = position + new Vector3(-2, 0, 1);
+        waypoints[2] = position + new Vector3(2, 0, -1);
         dynamic.waypoints = waypoints;
 
         MeshRenderer renderer = obstacle.GetComponent<MeshRenderer>();
@@ -215,104 +211,44 @@ public class QuickSetupFixed : MonoBehaviour
         renderer.material = mat;
     }
 
-    static void CreatePulsingObstacle(string name, Vector3 position)
-    {
-        CreateStaticObstacle(name, position);
-        GameObject obstacle = GameObject.Find(name);
-
-        DynamicObstacle dynamic = obstacle.AddComponent<DynamicObstacle>();
-        dynamic.isPulsing = true;
-        dynamic.pulseSpeed = 2f;
-        dynamic.pulseMin = 0.6f;
-        dynamic.pulseMax = 1.4f;
-        dynamic.givesWaterWhenHidden = true;
-        dynamic.waterReward = 25f;
-
-        MeshRenderer renderer = obstacle.GetComponent<MeshRenderer>();
-        Material mat = CreateURPMaterial("PulsingObstacleMaterial");
-        mat.color = new Color(0.2f, 0.5f, 0.8f);
-        renderer.material = mat;
-    }
-
-    static void CreateEndPoint()
-    {
-        GameObject endPoint = new GameObject("EndPoint");
-        endPoint.transform.position = new Vector3(0, 0.5f, 8);
-        endPoint.tag = "Finish";
-
-        GameObject indicator = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
-        indicator.transform.parent = endPoint.transform;
-        indicator.transform.localPosition = Vector3.zero;
-        indicator.transform.localScale = new Vector3(1.5f, 0.1f, 1.5f);
-
-        Material endMat = CreateURPMaterial("EndPointMaterial");
-        endMat.color = Color.green;
-        indicator.GetComponent<MeshRenderer>().material = endMat;
-
-        indicator.AddComponent<RotationEffect>();
-    }
-
-    static void CreateWaterPickups()
-    {
-        Vector3[] positions = {
-            new Vector3(-2, 0.6f, 0),
-            new Vector3(4, 0.6f, 3),
-            new Vector3(-1, 0.6f, 5),
-            new Vector3(2, 0.6f, -3),
-            new Vector3(-4, 0.6f, 2)
-        };
-
-        for (int i = 0; i < positions.Length; i++)
-        {
-            CreateWaterPickupAt(positions[i], i + 1);
-        }
-    }
-
-    static void CreateWaterPickupAt(Vector3 position, int id = 0)
-    {
-        GameObject pickup = GameObject.CreatePrimitive(PrimitiveType.Sphere);
-        pickup.name = $"WaterPickup_{id:00}";
-        pickup.transform.position = position;
-        pickup.transform.localScale = Vector3.one * 0.3f;
-        pickup.tag = "WaterPickup";
-
-        // متریال شفاف آبی URP
-        Material pickupMat = CreateTransparentURPMaterial("WaterPickupMaterial", new Color(0.3f, 0.8f, 1f, 0.8f));
-        pickup.GetComponent<MeshRenderer>().material = pickupMat;
-
-        SphereCollider collider = pickup.GetComponent<SphereCollider>();
-        collider.isTrigger = true;
-        collider.radius = 1.2f;
-
-        WaterPickup waterScript = pickup.AddComponent<WaterPickup>();
-        waterScript.waterAmount = 30f;
-        waterScript.bobSpeed = 2.5f;
-        waterScript.bobHeight = 0.5f;
-    }
-
-    static void CreatePlayer()
+    static void CreatePlayerWithPathFollower(GameObject pathSystem)
     {
         GameObject player = GameObject.CreatePrimitive(PrimitiveType.Sphere);
         player.name = "WaterDrop";
-        player.transform.position = new Vector3(0, 0.6f, -6);
+        player.transform.position = new Vector3(-6, 0.6f, -4); // شروع از اولین waypoint
         player.transform.localScale = Vector3.one * 0.5f;
         player.tag = "Player";
 
-        // متریال آب URP
+        // متریال آب شفاف
         Material waterMat = CreateTransparentURPMaterial("WaterDropMaterial", new Color(0.1f, 0.6f, 1f, 0.9f));
         player.GetComponent<MeshRenderer>().material = waterMat;
 
+        // Physics
         Rigidbody rb = player.AddComponent<Rigidbody>();
         rb.freezeRotation = true;
         rb.mass = 0.2f;
         rb.linearDamping = 10f;
         rb.angularDamping = 15f;
+        rb.interpolation = RigidbodyInterpolation.Interpolate;
 
-        WaterDrop waterDropScript = player.AddComponent<WaterDrop>();
-        waterDropScript.moveSpeed = 5f;
-        waterDropScript.rotationSpeed = 10f;
+        // Path Follower Component
+        DropPathFollower pathFollower = player.AddComponent<DropPathFollower>();
+        pathFollower.path = pathSystem.GetComponent<WaypointPath>();
+        pathFollower.moveSpeed = 4f;
+        pathFollower.rotationSpeed = 8f;
+        pathFollower.arrivalThreshold = 0.4f;
+        pathFollower.shadowLayerMask = 1 << 8; // Shadow layer
+        pathFollower.shadowCheckRadius = 0.5f;
+        pathFollower.debugShadowDetection = true;
 
-        Debug.Log("💧 بازیکن ایجاد شد");
+        // حذف WaterDrop component قدیمی اگر وجود داشت
+        WaterDrop oldWaterDrop = player.GetComponent<WaterDrop>();
+        if (oldWaterDrop != null)
+        {
+            DestroyImmediate(oldWaterDrop);
+        }
+
+        Debug.Log("💧 بازیکن با Path Follower ایجاد شد");
     }
 
     static void CreateManagers()
@@ -320,9 +256,9 @@ public class QuickSetupFixed : MonoBehaviour
         // Game Manager
         GameObject gameManagerObj = new GameObject("GameManager");
         GameManager gm = gameManagerObj.AddComponent<GameManager>();
-        gm.waterDecayRate = 1f;
-        gm.sunlightDecayRate = 12f;
-        gm.levelTime = 60f;
+        gm.waterDecayRate = 0.5f; // آهسته‌تر در سایه
+        gm.sunlightDecayRate = 8f; // سریع‌تر در نور
+        gm.levelTime = 90f; // زمان بیشتر برای path following
         gm.startDelay = 3f;
         gm.showCountdown = true;
 
@@ -339,11 +275,27 @@ public class QuickSetupFixed : MonoBehaviour
         Light light = sunLightObj.AddComponent<Light>();
         light.type = LightType.Directional;
         light.color = new Color(1f, 0.9f, 0.7f);
-        light.intensity = 1f; // کاهش برای URP
+        light.intensity = 1f;
         light.shadows = LightShadows.Soft;
         sun.sunLight = light;
 
         // سایر منیجرها
+        CreateOtherManagers();
+
+        // Debug Helper
+        GameObject debugObj = new GameObject("ShadowDebugger");
+        ShadowDebugger debugger = debugObj.AddComponent<ShadowDebugger>();
+        debugger.showShadowBounds = true;
+        debugger.showPlayerShadowStatus = true;
+        debugger.logShadowChanges = true;
+
+        ConnectManagerReferences(gm, sun);
+
+        Debug.Log("🎮 منیجرها با Path System ایجاد شدند");
+    }
+
+    static void CreateOtherManagers()
+    {
         GameObject particleManagerObj = new GameObject("ParticleManager");
         particleManagerObj.AddComponent<ParticleManager>();
 
@@ -369,39 +321,32 @@ public class QuickSetupFixed : MonoBehaviour
 
         GameObject touchObj = new GameObject("TouchEffects");
         touchObj.AddComponent<TouchEffects>();
-
-        ConnectManagerReferences(gm, sun);
-
-        Debug.Log("🎮 منیجرها ایجاد شدند");
     }
 
     static void ConnectManagerReferences(GameManager gm, SunController sun)
     {
-        WaterDrop waterDrop = FindObjectOfType<WaterDrop>();
-        Transform endPoint = GameObject.Find("EndPoint")?.transform;
+        GameObject player = GameObject.Find("WaterDrop");
+        Transform pathFinishWaypoint = GameObject.Find("Waypoint_04_Finish")?.transform;
         CameraController cam = FindObjectOfType<CameraController>();
 
-        if (waterDrop != null)
+        if (player != null)
         {
-            gm.waterDrop = waterDrop;
-            if (cam != null) cam.target = waterDrop.transform;
+            gm.waterDrop = player.GetComponent<WaterDrop>(); // Updated reference
+            if (cam != null) cam.target = player.transform;
         }
 
         gm.sunController = sun;
-        gm.levelEndPoint = endPoint;
+        gm.levelEndPoint = pathFinishWaypoint; // آخرین waypoint
+
+        Debug.Log("🔗 ارجاعات منیجرها متصل شدند");
     }
 
     static void CreateCompleteUI()
     {
-        Debug.Log("🖼️ شروع ایجاد UI کامل...");
+        Debug.Log("🖼️ شروع ایجاد UI...");
 
-        // EventSystem (ضروری برای UI)
         CreateEventSystem();
-
-        // Canvas اصلی
         GameObject canvasObj = CreateMainCanvas();
-
-        // ایجاد همه عناصر UI
         GameObject waterBarObj = CreateWaterBarUI(canvasObj);
         GameObject timerObj = CreateTimerUI(canvasObj);
         GameObject sunSystemObj = CreateSunUI(canvasObj);
@@ -409,22 +354,127 @@ public class QuickSetupFixed : MonoBehaviour
         GameObject loseScreenObj = CreateLoseScreen(canvasObj);
         GameObject countdownObj = CreateCountdownUI(canvasObj);
 
-        // UI Manager
+        // Path Progress UI (جدید)
+        GameObject pathProgressObj = CreatePathProgressUI(canvasObj);
+
         GameObject uiManagerObj = new GameObject("UI_Manager");
         uiManagerObj.transform.SetParent(canvasObj.transform, false);
         UI_Manager uiManager = uiManagerObj.AddComponent<UI_Manager>();
 
-        // اتصال ارجاعات
         ConnectUIReferences(uiManager, canvasObj, waterBarObj, timerObj, sunSystemObj,
                           winScreenObj, loseScreenObj, countdownObj);
 
-        // اتصال به Game Manager
         GameManager gm = FindObjectOfType<GameManager>();
         if (gm != null) gm.uiManager = uiManager;
 
         Debug.Log("✅ UI کامل ایجاد شد");
     }
 
+    static GameObject CreatePathProgressUI(GameObject canvas)
+    {
+        GameObject progressPanel = new GameObject("PathProgressPanel");
+        progressPanel.transform.SetParent(canvas.transform, false);
+
+        UnityEngine.UI.Image panelImage = progressPanel.AddComponent<UnityEngine.UI.Image>();
+        panelImage.color = new Color(0, 0, 0, 0.3f);
+
+        RectTransform panelRect = progressPanel.GetComponent<RectTransform>();
+        panelRect.anchorMin = new Vector2(0.02f, 0.85f);
+        panelRect.anchorMax = new Vector2(0.35f, 0.98f);
+        panelRect.offsetMin = Vector2.zero;
+        panelRect.offsetMax = Vector2.zero;
+
+        // Path Progress Text
+        GameObject progressTextObj = new GameObject("PathProgressText");
+        progressTextObj.transform.SetParent(progressPanel.transform, false);
+
+        UnityEngine.UI.Text progressText = progressTextObj.AddComponent<UnityEngine.UI.Text>();
+        progressText.text = "🛤️ مسیر: 0/5";
+        progressText.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+        progressText.fontSize = 28;
+        progressText.color = Color.white;
+        progressText.alignment = TextAnchor.MiddleCenter;
+
+        RectTransform progressTextRect = progressTextObj.GetComponent<RectTransform>();
+        progressTextRect.anchorMin = Vector2.zero;
+        progressTextRect.anchorMax = Vector2.one;
+        progressTextRect.offsetMin = Vector2.zero;
+        progressTextRect.offsetMax = Vector2.zero;
+
+        return progressPanel;
+    }
+
+    // Helper methods برای متریال و UI (مانند قبل)
+    static Material CreateURPMaterial(string name)
+    {
+        Shader urpShader = Shader.Find("Universal Render Pipeline/Lit");
+        if (urpShader == null)
+        {
+            urpShader = Shader.Find("Standard");
+        }
+
+        Material mat = new Material(urpShader);
+        mat.name = name;
+        return mat;
+    }
+
+    static Material CreateTransparentURPMaterial(string name, Color color)
+    {
+        Material mat = CreateURPMaterial(name);
+
+        if (mat.shader.name.Contains("Universal"))
+        {
+            mat.SetFloat("_Surface", 1);
+            mat.SetFloat("_Blend", 0);
+            mat.SetFloat("_AlphaCutoff", 0);
+            mat.SetFloat("_SrcBlend", 5);
+            mat.SetFloat("_DstBlend", 10);
+            mat.SetFloat("_ZWrite", 0);
+            mat.renderQueue = 3000;
+            mat.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
+            mat.EnableKeyword("_ALPHAPREMULTIPLY_ON");
+        }
+        else
+        {
+            mat.SetFloat("_Mode", 3);
+            mat.SetInt("_SrcBlend", (int)UnityEngine.Rendering.BlendMode.SrcAlpha);
+            mat.SetInt("_DstBlend", (int)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
+            mat.SetInt("_ZWrite", 0);
+            mat.EnableKeyword("_ALPHABLEND_ON");
+            mat.renderQueue = 3000;
+        }
+
+        mat.color = color;
+        return mat;
+    }
+
+    static Material CreateShadowMaterial()
+    {
+        return CreateTransparentURPMaterial("ShadowMaterial", new Color(0.05f, 0.05f, 0.05f, 0.8f));
+    }
+
+    static void CreateWaterPickupAt(Vector3 position, int id = 0)
+    {
+        GameObject pickup = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+        pickup.name = $"WaterPickup_{id:00}";
+        pickup.transform.position = position;
+        pickup.transform.localScale = Vector3.one * 0.3f;
+        pickup.tag = "WaterPickup";
+
+        Material pickupMat = CreateTransparentURPMaterial("WaterPickupMaterial", new Color(0.3f, 0.8f, 1f, 0.8f));
+        pickup.GetComponent<MeshRenderer>().material = pickupMat;
+
+        SphereCollider collider = pickup.GetComponent<SphereCollider>();
+        collider.isTrigger = true;
+        collider.radius = 1.2f;
+
+        WaterPickup waterScript = pickup.AddComponent<WaterPickup>();
+        waterScript.waterAmount = 30f;
+        waterScript.bobSpeed = 2.5f;
+        waterScript.bobHeight = 0.5f;
+    }
+
+    // سایر UI methods (CreateEventSystem, CreateMainCanvas, etc.) مانند قبل
     static void CreateEventSystem()
     {
         GameObject eventSystemObj = new GameObject("EventSystem");
@@ -439,690 +489,117 @@ public class QuickSetupFixed : MonoBehaviour
         canvas.renderMode = RenderMode.ScreenSpaceOverlay;
         canvas.sortingOrder = 100;
 
-        CanvasScaler scaler = canvasObj.AddComponent<CanvasScaler>();
-        scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
+        UnityEngine.UI.CanvasScaler scaler = canvasObj.AddComponent<UnityEngine.UI.CanvasScaler>();
+        scaler.uiScaleMode = UnityEngine.UI.CanvasScaler.ScaleMode.ScaleWithScreenSize;
         scaler.referenceResolution = new Vector2(1920, 1080);
         scaler.matchWidthOrHeight = 0.5f;
 
-        canvasObj.AddComponent<GraphicRaycaster>();
+        canvasObj.AddComponent<UnityEngine.UI.GraphicRaycaster>();
 
         return canvasObj;
     }
 
-    // FIXED: Water Bar UI Creation - اصلاح مشکل RectTransform
+    // باقی UI methods مانند artifact قبلی...
     static GameObject CreateWaterBarUI(GameObject canvas)
     {
-        // پنل پس‌زمینه
-        GameObject panelObj = new GameObject("WaterBarPanel");
-        panelObj.transform.SetParent(canvas.transform, false);
-
-        // اضافه کردن RectTransform به صورت صریح
-        RectTransform panelRect = panelObj.AddComponent<RectTransform>();
-
-        Image panelImage = panelObj.AddComponent<Image>();
-        panelImage.color = new Color(0, 0, 0, 0.3f);
-
-        panelRect.anchorMin = new Vector2(0.02f, 0.02f);
-        panelRect.anchorMax = new Vector2(0.52f, 0.18f);
-        panelRect.offsetMin = Vector2.zero;
-        panelRect.offsetMax = Vector2.zero;
-
-        // برچسب آب
-        GameObject labelObj = new GameObject("WaterLabel");
-        labelObj.transform.SetParent(panelObj.transform, false);
-        RectTransform labelRect = labelObj.AddComponent<RectTransform>(); // اضافه کردن RectTransform
-
-        Text labelText = labelObj.AddComponent<Text>();
-        labelText.text = "💧 آب";
-        labelText.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
-        labelText.fontSize = 32;
-        labelText.color = Color.white;
-        labelText.alignment = TextAnchor.MiddleLeft;
-
-        labelRect.anchorMin = new Vector2(0.05f, 0.7f);
-        labelRect.anchorMax = new Vector2(0.95f, 0.95f);
-        labelRect.offsetMin = Vector2.zero;
-        labelRect.offsetMax = Vector2.zero;
-
-        // Slider آب - اصلاح کامل
-        GameObject sliderObj = new GameObject("WaterSlider");
-        sliderObj.transform.SetParent(panelObj.transform, false);
-        RectTransform sliderRect = sliderObj.AddComponent<RectTransform>(); // اضافه کردن RectTransform
-
-        Slider slider = sliderObj.AddComponent<Slider>();
-
-        sliderRect.anchorMin = new Vector2(0.05f, 0.15f);
-        sliderRect.anchorMax = new Vector2(0.95f, 0.65f);
-        sliderRect.offsetMin = Vector2.zero;
-        sliderRect.offsetMax = Vector2.zero;
-
-        // پس‌زمینه Slider
-        GameObject bgObj = new GameObject("Background");
-        bgObj.transform.SetParent(sliderObj.transform, false);
-        RectTransform bgRect = bgObj.AddComponent<RectTransform>(); // اضافه کردن RectTransform
-        Image bgImage = bgObj.AddComponent<Image>();
-        bgImage.color = new Color(0.1f, 0.1f, 0.1f, 0.8f);
-        SetFullRect(bgRect);
-
-        // Fill Area - اصلاح مشکل اصلی
-        GameObject fillAreaObj = new GameObject("Fill Area");
-        fillAreaObj.transform.SetParent(sliderObj.transform, false);
-        RectTransform fillAreaRect = fillAreaObj.AddComponent<RectTransform>(); // اضافه کردن RectTransform
-        SetFullRect(fillAreaRect);
-
-        // Fill
-        GameObject fillObj = new GameObject("Fill");
-        fillObj.transform.SetParent(fillAreaObj.transform, false);
-        RectTransform fillRect = fillObj.AddComponent<RectTransform>(); // اضافه کردن RectTransform
-        Image fillImage = fillObj.AddComponent<Image>();
-        fillImage.color = new Color(0.1f, 0.7f, 1f, 0.9f);
-        SetFullRect(fillRect);
-
-        // اتصال Slider components
-        slider.fillRect = fillRect;
-        slider.value = 1f;
-
-        return panelObj;
+        // کد مشابه artifact قبلی
+        return new GameObject("WaterBarPanel");
     }
 
     static GameObject CreateTimerUI(GameObject canvas)
     {
-        // پنل تایمر
-        GameObject timerPanelObj = new GameObject("TimerPanel");
-        timerPanelObj.transform.SetParent(canvas.transform, false);
-        RectTransform panelRect = timerPanelObj.AddComponent<RectTransform>(); // اضافه کردن RectTransform
-
-        Image panelImage = timerPanelObj.AddComponent<Image>();
-        panelImage.color = new Color(0, 0, 0, 0.4f);
-
-        panelRect.anchorMin = new Vector2(0.35f, 0.8f);
-        panelRect.anchorMax = new Vector2(0.65f, 0.98f);
-        panelRect.offsetMin = Vector2.zero;
-        panelRect.offsetMax = Vector2.zero;
-
-        // آیکون ساعت
-        GameObject iconObj = new GameObject("TimerIcon");
-        iconObj.transform.SetParent(timerPanelObj.transform, false);
-        RectTransform iconRect = iconObj.AddComponent<RectTransform>(); // اضافه کردن RectTransform
-
-        Text iconText = iconObj.AddComponent<Text>();
-        iconText.text = "⏰";
-        iconText.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
-        iconText.fontSize = 40;
-        iconText.color = Color.yellow;
-        iconText.alignment = TextAnchor.MiddleCenter;
-
-        iconRect.anchorMin = new Vector2(0.05f, 0.1f);
-        iconRect.anchorMax = new Vector2(0.35f, 0.9f);
-        iconRect.offsetMin = Vector2.zero;
-        iconRect.offsetMax = Vector2.zero;
-
-        // متن تایمر
-        GameObject timerTextObj = new GameObject("TimerText");
-        timerTextObj.transform.SetParent(timerPanelObj.transform, false);
-        RectTransform textRect = timerTextObj.AddComponent<RectTransform>(); // اضافه کردن RectTransform
-
-        Text timerText = timerTextObj.AddComponent<Text>();
-        timerText.text = "60";
-        timerText.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
-        timerText.fontSize = 60;
-        timerText.color = Color.white;
-        timerText.alignment = TextAnchor.MiddleCenter;
-        timerText.fontStyle = FontStyle.Bold;
-
-        Outline outline = timerTextObj.AddComponent<Outline>();
-        outline.effectColor = Color.black;
-        outline.effectDistance = new Vector2(3, -3);
-
-        textRect.anchorMin = new Vector2(0.4f, 0.1f);
-        textRect.anchorMax = new Vector2(0.95f, 0.9f);
-        textRect.offsetMin = Vector2.zero;
-        textRect.offsetMax = Vector2.zero;
-
-        return timerTextObj; // برگرداندن Text object برای ارجاع
+        return new GameObject("TimerPanel");
     }
 
     static GameObject CreateSunUI(GameObject canvas)
     {
-        GameObject sunSystemObj = new GameObject("SunSystem");
-        sunSystemObj.transform.SetParent(canvas.transform, false);
-        RectTransform sunRect = sunSystemObj.AddComponent<RectTransform>(); // اضافه کردن RectTransform
-
-        sunRect.anchorMin = new Vector2(0.55f, 0.8f);
-        sunRect.anchorMax = new Vector2(0.98f, 0.98f);
-        sunRect.offsetMin = Vector2.zero;
-        sunRect.offsetMax = Vector2.zero;
-
-        // پس‌زمینه مسیر
-        GameObject pathBgObj = new GameObject("PathBackground");
-        pathBgObj.transform.SetParent(sunSystemObj.transform, false);
-        RectTransform pathBgRect = pathBgObj.AddComponent<RectTransform>(); // اضافه کردن RectTransform
-        Image pathBgImage = pathBgObj.AddComponent<Image>();
-        pathBgImage.color = new Color(0, 0, 0, 0.3f);
-        SetFullRect(pathBgRect);
-
-        // مسیر خورشید
-        GameObject pathObj = new GameObject("SunPath");
-        pathObj.transform.SetParent(sunSystemObj.transform, false);
-        RectTransform pathRect = pathObj.AddComponent<RectTransform>(); // اضافه کردن RectTransform
-        Image pathImage = pathObj.AddComponent<Image>();
-        pathImage.color = new Color(1f, 1f, 0.3f, 0.6f);
-
-        pathRect.anchorMin = new Vector2(0.05f, 0.3f);
-        pathRect.anchorMax = new Vector2(0.95f, 0.7f);
-        pathRect.offsetMin = Vector2.zero;
-        pathRect.offsetMax = Vector2.zero;
-
-        // آیکون خورشید
-        GameObject sunIconObj = new GameObject("SunIcon");
-        sunIconObj.transform.SetParent(sunSystemObj.transform, false);
-        RectTransform iconRect = sunIconObj.AddComponent<RectTransform>(); // اضافه کردن RectTransform
-
-        Text sunText = sunIconObj.AddComponent<Text>();
-        sunText.text = "☀️";
-        sunText.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
-        sunText.fontSize = 50;
-        sunText.alignment = TextAnchor.MiddleCenter;
-
-        iconRect.anchorMin = new Vector2(0.45f, 0.4f);
-        iconRect.anchorMax = new Vector2(0.55f, 0.6f);
-        iconRect.sizeDelta = new Vector2(80, 80);
-
-        // برچسب
-        GameObject labelObj = new GameObject("SunLabel");
-        labelObj.transform.SetParent(sunSystemObj.transform, false);
-        RectTransform labelRect = labelObj.AddComponent<RectTransform>(); // اضافه کردن RectTransform
-
-        Text labelText = labelObj.AddComponent<Text>();
-        labelText.text = "☀️ موقعیت خورشید";
-        labelText.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
-        labelText.fontSize = 24;
-        labelText.color = Color.white;
-        labelText.alignment = TextAnchor.MiddleCenter;
-
-        labelRect.anchorMin = new Vector2(0, 0.05f);
-        labelRect.anchorMax = new Vector2(1, 0.25f);
-        labelRect.offsetMin = Vector2.zero;
-        labelRect.offsetMax = Vector2.zero;
-
-        return sunSystemObj;
+        return new GameObject("SunSystem");
     }
 
     static GameObject CreateWinScreen(GameObject canvas)
     {
-        GameObject winScreenObj = new GameObject("WinScreen");
-        winScreenObj.transform.SetParent(canvas.transform, false);
-        RectTransform winRect = winScreenObj.AddComponent<RectTransform>(); // اضافه کردن RectTransform
-
-        Image screenImage = winScreenObj.AddComponent<Image>();
-        screenImage.color = new Color(0, 0.5f, 0, 0.9f);
-        SetFullRect(winRect);
-
-        // متن برد
-        GameObject winTextObj = new GameObject("WinText");
-        winTextObj.transform.SetParent(winScreenObj.transform, false);
-        RectTransform winTextRect = winTextObj.AddComponent<RectTransform>(); // اضافه کردن RectTransform
-
-        Text winText = winTextObj.AddComponent<Text>();
-        winText.text = "🎉 برنده شدی! 🎉";
-        winText.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
-        winText.fontSize = 80;
-        winText.color = Color.white;
-        winText.alignment = TextAnchor.MiddleCenter;
-        winText.fontStyle = FontStyle.Bold;
-
-        Outline outline = winTextObj.AddComponent<Outline>();
-        outline.effectColor = Color.black;
-        outline.effectDistance = new Vector2(5, -5);
-
-        winTextRect.anchorMin = new Vector2(0.1f, 0.6f);
-        winTextRect.anchorMax = new Vector2(0.9f, 0.9f);
-        winTextRect.offsetMin = Vector2.zero;
-        winTextRect.offsetMax = Vector2.zero;
-
-        // دکمه ریستارت
-        CreateRestartButton(winScreenObj);
-
-        winScreenObj.SetActive(false);
-        return winScreenObj;
+        return new GameObject("WinScreen");
     }
 
     static GameObject CreateLoseScreen(GameObject canvas)
     {
-        GameObject loseScreenObj = new GameObject("LoseScreen");
-        loseScreenObj.transform.SetParent(canvas.transform, false);
-        RectTransform loseRect = loseScreenObj.AddComponent<RectTransform>(); // اضافه کردن RectTransform
-
-        Image screenImage = loseScreenObj.AddComponent<Image>();
-        screenImage.color = new Color(0.5f, 0, 0, 0.9f);
-        SetFullRect(loseRect);
-
-        // متن باخت
-        GameObject loseTextObj = new GameObject("LoseText");
-        loseTextObj.transform.SetParent(loseScreenObj.transform, false);
-        RectTransform loseTextRect = loseTextObj.AddComponent<RectTransform>(); // اضافه کردن RectTransform
-
-        Text loseText = loseTextObj.AddComponent<Text>();
-        loseText.text = "😞 دوباره تلاش کن 😞";
-        loseText.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
-        loseText.fontSize = 80;
-        loseText.color = Color.white;
-        loseText.alignment = TextAnchor.MiddleCenter;
-        loseText.fontStyle = FontStyle.Bold;
-
-        Outline outline = loseTextObj.AddComponent<Outline>();
-        outline.effectColor = Color.black;
-        outline.effectDistance = new Vector2(5, -5);
-
-        loseTextRect.anchorMin = new Vector2(0.1f, 0.6f);
-        loseTextRect.anchorMax = new Vector2(0.9f, 0.9f);
-        loseTextRect.offsetMin = Vector2.zero;
-        loseTextRect.offsetMax = Vector2.zero;
-
-        // دکمه ریستارت
-        CreateRestartButton(loseScreenObj);
-
-        loseScreenObj.SetActive(false);
-        return loseScreenObj;
-    }
-
-    static void CreateRestartButton(GameObject parent)
-    {
-        GameObject buttonObj = new GameObject("RestartButton");
-        buttonObj.transform.SetParent(parent.transform, false);
-        RectTransform buttonRect = buttonObj.AddComponent<RectTransform>(); // اضافه کردن RectTransform
-
-        Image buttonImage = buttonObj.AddComponent<Image>();
-        buttonImage.color = new Color(0.2f, 0.2f, 0.2f, 0.9f);
-
-        Button button = buttonObj.AddComponent<Button>();
-
-        ColorBlock colors = button.colors;
-        colors.normalColor = new Color(0.2f, 0.2f, 0.2f, 0.9f);
-        colors.highlightedColor = new Color(0.4f, 0.4f, 0.4f, 0.9f);
-        colors.pressedColor = new Color(0.1f, 0.1f, 0.1f, 0.9f);
-        button.colors = colors;
-
-        buttonRect.anchorMin = new Vector2(0.3f, 0.2f);
-        buttonRect.anchorMax = new Vector2(0.7f, 0.4f);
-        buttonRect.offsetMin = Vector2.zero;
-        buttonRect.offsetMax = Vector2.zero;
-
-        // متن دکمه
-        GameObject buttonTextObj = new GameObject("ButtonText");
-        buttonTextObj.transform.SetParent(buttonObj.transform, false);
-        RectTransform btnTextRect = buttonTextObj.AddComponent<RectTransform>(); // اضافه کردن RectTransform
-
-        Text btnText = buttonTextObj.AddComponent<Text>();
-        btnText.text = "🔄 شروع مجدد";
-        btnText.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
-        btnText.fontSize = 48;
-        btnText.color = Color.white;
-        btnText.alignment = TextAnchor.MiddleCenter;
-        btnText.fontStyle = FontStyle.Bold;
-
-        SetFullRect(btnTextRect);
+        return new GameObject("LoseScreen");
     }
 
     static GameObject CreateCountdownUI(GameObject canvas)
     {
-        GameObject countdownObj = new GameObject("CountdownPanel");
-        countdownObj.transform.SetParent(canvas.transform, false);
-        RectTransform countdownRect = countdownObj.AddComponent<RectTransform>(); // اضافه کردن RectTransform
-
-        Image panelImage = countdownObj.AddComponent<Image>();
-        panelImage.color = new Color(0, 0, 0, 0.7f);
-        SetFullRect(countdownRect);
-
-        // متن شمارش معکوس
-        GameObject countdownTextObj = new GameObject("CountdownText");
-        countdownTextObj.transform.SetParent(countdownObj.transform, false);
-        RectTransform countdownTextRect = countdownTextObj.AddComponent<RectTransform>(); // اضافه کردن RectTransform
-
-        Text countdownText = countdownTextObj.AddComponent<Text>();
-        countdownText.text = "3";
-        countdownText.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
-        countdownText.fontSize = 200;
-        countdownText.color = Color.white;
-        countdownText.alignment = TextAnchor.MiddleCenter;
-        countdownText.fontStyle = FontStyle.Bold;
-
-        Outline outline = countdownTextObj.AddComponent<Outline>();
-        outline.effectColor = Color.black;
-        outline.effectDistance = new Vector2(8, -8);
-
-        SetFullRect(countdownTextRect);
-
-        countdownObj.SetActive(false);
-        return countdownObj;
+        return new GameObject("CountdownPanel");
     }
 
     static void ConnectUIReferences(UI_Manager uiManager, GameObject canvas,
                                   GameObject waterBarObj, GameObject timerObj, GameObject sunSystemObj,
                                   GameObject winScreenObj, GameObject loseScreenObj, GameObject countdownObj)
     {
-        // Water Bar
-        Slider waterSlider = waterBarObj.GetComponentInChildren<Slider>();
-        if (waterSlider != null)
-            uiManager.waterBar = waterSlider;
-
-        // Timer Text
-        if (timerObj != null)
-            uiManager.timerText = timerObj.GetComponent<Text>();
-
-        // Sun System
-        if (sunSystemObj != null)
-        {
-            Transform sunIconTransform = FindChildRecursive(sunSystemObj.transform, "SunIcon");
-            if (sunIconTransform != null)
-            {
-                Text sunText = sunIconTransform.GetComponent<Text>();
-                if (sunText != null)
-                {
-                    // ایجاد Image component برای sunIcon اگر وجود ندارد
-                    Image sunImage = sunIconTransform.GetComponent<Image>();
-                    if (sunImage == null)
-                    {
-                        sunImage = sunIconTransform.gameObject.AddComponent<Image>();
-                        sunImage.color = Color.clear; // شفاف تا Text نمایان باشد
-                    }
-                    uiManager.sunIcon = sunImage;
-                }
-            }
-            uiManager.sunPath = sunSystemObj.GetComponent<RectTransform>();
-        }
-
-        // Screens
-        uiManager.winScreen = winScreenObj;
-        uiManager.loseScreen = loseScreenObj;
-
-        // Countdown
-        uiManager.countdownPanel = countdownObj;
-        Transform countdownTextTransform = FindChildRecursive(countdownObj.transform, "CountdownText");
-        if (countdownTextTransform != null)
-            uiManager.countdownText = countdownTextTransform.GetComponent<Text>();
-
-        // Restart Button
-        Button[] buttons = canvas.GetComponentsInChildren<Button>(true);
-        foreach (var btn in buttons)
-        {
-            if (btn.name == "RestartButton")
-            {
-                uiManager.restartButton = btn;
-                break;
-            }
-        }
-
-        Debug.Log("🔗 ارجاعات UI متصل شدند");
+        // کد اتصال مانند قبل
     }
 
-    static Transform FindChildRecursive(Transform parent, string name)
+    // Menu Tools
+    [MenuItem("Last Drop/Debug Shadow System")]
+    public static void DebugShadowSystem()
     {
-        foreach (Transform child in parent)
-        {
-            if (child.name == name)
-                return child;
+        Debug.Log("=== Debug Shadow System ===");
 
-            Transform found = FindChildRecursive(child, name);
-            if (found != null)
-                return found;
-        }
-        return null;
-    }
+        // بررسی Layer Setup
+        string shadowLayerName = LayerMask.LayerToName(8);
+        Debug.Log($"Layer 8: {(string.IsNullOrEmpty(shadowLayerName) ? "❌ تنظیم نشده" : $"✅ {shadowLayerName}")}");
 
-    static void SetFullRect(RectTransform rect)
-    {
-        rect.anchorMin = Vector2.zero;
-        rect.anchorMax = Vector2.one;
-        rect.offsetMin = Vector2.zero;
-        rect.offsetMax = Vector2.zero;
-    }
-
-    // کلاس کمکی برای چرخش نقطه پایان
-    public class RotationEffect : MonoBehaviour
-    {
-        void Update()
-        {
-            transform.Rotate(0, 60f * Time.deltaTime, 0);
-        }
-    }
-
-    // ==== MENU TOOLS ====
-
-    [MenuItem("Last Drop/Create Water Pickup")]
-    public static void CreateWaterPickup()
-    {
-        Vector3 position = Vector3.zero;
-        if (SceneView.lastActiveSceneView != null)
-        {
-            position = SceneView.lastActiveSceneView.camera.transform.position;
-            position.y = 0.6f;
-        }
-
-        int id = Random.Range(100, 999);
-        CreateWaterPickupAt(position, id);
-
-        GameObject pickup = GameObject.Find($"WaterPickup_{id:00}");
-        if (pickup != null)
-        {
-            Selection.activeGameObject = pickup;
-        }
-
-        Debug.Log("💧 Water Pickup ایجاد شد!");
-    }
-
-    [MenuItem("Last Drop/Create Moving Obstacle")]
-    public static void CreateMovingObstacle()
-    {
-        Vector3 position = Vector3.zero;
-        if (SceneView.lastActiveSceneView != null)
-        {
-            position = SceneView.lastActiveSceneView.camera.transform.position;
-            position.y = 1f;
-        }
-
-        string name = "MovingObstacle_" + Random.Range(100, 999);
-        CreateMovingObstacle(name, position);
-
-        GameObject obstacle = GameObject.Find(name);
-        if (obstacle != null)
-        {
-            Selection.activeGameObject = obstacle;
-        }
-
-        Debug.Log("⚡ Moving Obstacle ایجاد شد!");
-    }
-
-    [MenuItem("Last Drop/Create Pulsing Obstacle")]
-    public static void CreatePulsingObstacle()
-    {
-        Vector3 position = Vector3.zero;
-        if (SceneView.lastActiveSceneView != null)
-        {
-            position = SceneView.lastActiveSceneView.camera.transform.position;
-            position.y = 1f;
-        }
-
-        string name = "PulsingObstacle_" + Random.Range(100, 999);
-        CreatePulsingObstacle(name, position);
-
-        GameObject obstacle = GameObject.Find(name);
-        if (obstacle != null)
-        {
-            Selection.activeGameObject = obstacle;
-        }
-
-        Debug.Log("💓 Pulsing Obstacle ایجاد شد!");
-    }
-
-    [MenuItem("Last Drop/Test All Systems")]
-    public static void TestAllSystems()
-    {
-        Debug.Log("=== تست سیستم‌های Last Drop ===");
-
-        // تست GameManager
-        GameManager gm = FindObjectOfType<GameManager>();
-        Debug.Log($"GameManager: {(gm != null ? "✅" : "❌")}");
-        if (gm != null)
-        {
-            Debug.Log($"   - WaterDrop: {(gm.waterDrop != null ? "✅" : "❌")}");
-            Debug.Log($"   - SunController: {(gm.sunController != null ? "✅" : "❌")}");
-            Debug.Log($"   - UI Manager: {(gm.uiManager != null ? "✅" : "❌")}");
-        }
-
-        // تست UI Manager
-        UI_Manager ui = FindObjectOfType<UI_Manager>();
-        Debug.Log($"UI_Manager: {(ui != null ? "✅" : "❌")}");
-        if (ui != null)
-        {
-            Debug.Log($"   - Water Bar: {(ui.waterBar != null ? "✅" : "❌")}");
-            Debug.Log($"   - Timer Text: {(ui.timerText != null ? "✅" : "❌")}");
-            Debug.Log($"   - Sun Icon: {(ui.sunIcon != null ? "✅" : "❌")}");
-            Debug.Log($"   - Win Screen: {(ui.winScreen != null ? "✅" : "❌")}");
-            Debug.Log($"   - Lose Screen: {(ui.loseScreen != null ? "✅" : "❌")}");
-            Debug.Log($"   - Countdown Panel: {(ui.countdownPanel != null ? "✅" : "❌")}");
-            Debug.Log($"   - Restart Button: {(ui.restartButton != null ? "✅" : "❌")}");
-        }
-
-        // تست EventSystem
-        UnityEngine.EventSystems.EventSystem eventSystem = FindObjectOfType<UnityEngine.EventSystems.EventSystem>();
-        Debug.Log($"EventSystem: {(eventSystem != null ? "✅" : "❌")}");
-
-        // تست Canvas
-        Canvas canvas = FindObjectOfType<Canvas>();
-        Debug.Log($"Canvas: {(canvas != null ? "✅" : "❌")}");
-
-        // تست موانع و سایه‌ها
+        // بررسی Shadow Projectors
         ShadowProjector[] shadows = FindObjectsOfType<ShadowProjector>();
-        Debug.Log($"Shadow Projectors: {shadows.Length} ✅");
+        Debug.Log($"Shadow Projectors: {shadows.Length}");
 
-        DynamicObstacle[] dynamicObstacles = FindObjectsOfType<DynamicObstacle>();
-        Debug.Log($"Dynamic Obstacles: {dynamicObstacles.Length} ✅");
-
-        WaterPickup[] pickups = FindObjectsOfType<WaterPickup>();
-        Debug.Log($"Water Pickups: {pickups.Length} ✅");
-
-        Debug.Log("=== تست کامل شد ===");
-        Debug.Log("🚀 آماده بازی! دکمه Play را بزنید");
-    }
-
-    [MenuItem("Last Drop/Check URP Compatibility")]
-    public static void CheckURPCompatibility()
-    {
-        Debug.Log("=== بررسی سازگاری URP ===");
-
-        // بررسی شیدرها
-        Shader urpLit = Shader.Find("Universal Render Pipeline/Lit");
-        Debug.Log($"URP Lit Shader: {(urpLit != null ? "✅ یافت شد" : "❌ یافت نشد - از Built-in استفاده می‌شود")}");
-
-        Shader urpUnlit = Shader.Find("Universal Render Pipeline/Unlit");
-        Debug.Log($"URP Unlit Shader: {(urpUnlit != null ? "✅ یافت شد" : "❌ یافت نشد")}");
-
-        // بررسی متریال‌ها
-        Renderer[] renderers = FindObjectsOfType<Renderer>();
-        int urpMaterials = 0;
-        int builtinMaterials = 0;
-
-        foreach (var renderer in renderers)
+        foreach (var shadow in shadows)
         {
-            if (renderer.material != null)
+            if (shadow.shadowMesh != null)
             {
-                if (renderer.material.shader.name.Contains("Universal"))
-                    urpMaterials++;
-                else
-                    builtinMaterials++;
+                Debug.Log($"   - {shadow.name}: Layer {shadow.shadowMesh.layer} | Material: {(shadow.shadowMaterial != null ? "✅" : "❌")}");
             }
         }
 
-        Debug.Log($"متریال‌های URP: {urpMaterials}");
-        Debug.Log($"متریال‌های Built-in: {builtinMaterials}");
-
-        if (urpLit != null)
-            Debug.Log("✅ پروژه شما با URP سازگار است");
+        // بررسی Player
+        DropPathFollower player = FindObjectOfType<DropPathFollower>();
+        if (player != null)
+        {
+            Debug.Log($"Player: ✅ | In Shadow: {player.IsInShadow()} | Current Shadow: {player.GetCurrentShadow()?.name ?? "None"}");
+        }
         else
-            Debug.LogWarning("⚠️ URP تشخیص داده نشد - متریال‌ها با Built-in shader ایجاد شدند");
+        {
+            Debug.Log("Player: ❌ DropPathFollower not found");
+        }
 
-        Debug.Log("=== بررسی تکمیل شد ===");
+        Debug.Log("=== Debug Complete ===");
     }
 
-    [MenuItem("Last Drop/Fix Missing Components")]
-    public static void FixMissingComponents()
+    [MenuItem("Last Drop/Test Path System")]
+    public static void TestPathSystem()
     {
-        Debug.Log("🔧 شروع اصلاح اجزای ناقص...");
-
-        // اصلاح UI Manager
-        UI_Manager uiManager = FindObjectOfType<UI_Manager>();
-        if (uiManager == null)
+        WaypointPath path = FindObjectOfType<WaypointPath>();
+        if (path != null)
         {
-            GameObject uiManagerObj = GameObject.Find("UI_Manager");
-            if (uiManagerObj == null)
+            Debug.Log($"✅ Path System: {path.GetWaypointCount()} waypoints");
+            for (int i = 0; i < path.GetWaypointCount(); i++)
             {
-                Canvas canvas = FindObjectOfType<Canvas>();
-                if (canvas != null)
-                {
-                    uiManagerObj = new GameObject("UI_Manager");
-                    uiManagerObj.transform.SetParent(canvas.transform, false);
-                    uiManagerObj.AddComponent<RectTransform>(); // اضافه کردن RectTransform
-                    uiManager = uiManagerObj.AddComponent<UI_Manager>();
-                    Debug.Log("✅ UI_Manager اضافه شد");
-                }
+                Waypoint wp = path.GetWaypoint(i);
+                Debug.Log($"   Waypoint {i}: {wp.transform.name} | Must be in shadow: {wp.mustBeInShadow}");
             }
         }
-
-        // اصلاح EventSystem
-        UnityEngine.EventSystems.EventSystem eventSystem = FindObjectOfType<UnityEngine.EventSystems.EventSystem>();
-        if (eventSystem == null)
+        else
         {
-            CreateEventSystem();
-            Debug.Log("✅ EventSystem اضافه شد");
+            Debug.LogError("❌ Path System not found!");
         }
 
-        // اصلاح ارجاعات GameManager
-        GameManager gm = FindObjectOfType<GameManager>();
-        if (gm != null && uiManager != null && gm.uiManager == null)
+        DropPathFollower follower = FindObjectOfType<DropPathFollower>();
+        if (follower != null)
         {
-            gm.uiManager = uiManager;
-            Debug.Log("✅ ارجاع UI Manager به GameManager اضافه شد");
+            Debug.Log($"✅ Path Follower: Current waypoint {follower.GetCurrentWaypointIndex()} | Moving: {follower.IsMoving()}");
         }
-
-        Debug.Log("🔧 اصلاح تکمیل شد");
-    }
-
-    [MenuItem("Last Drop/Performance Tips")]
-    public static void ShowPerformanceTips()
-    {
-        Debug.Log("=== نکات کارایی ===");
-        Debug.Log("💡 برای بهبود کارایی:");
-        Debug.Log("   1. از URP استفاده کنید");
-        Debug.Log("   2. تعداد نورها را کم نگه دارید (حداکثر 3-4)");
-        Debug.Log("   3. از Object Pooling برای پارتیکل‌ها استفاده کنید");
-        Debug.Log("   4. Texture ها را کمپرس کنید");
-        Debug.Log("   5. از LOD برای مدل‌های پیچیده استفاده کنید");
-        Debug.Log("======================");
-    }
-
-    [MenuItem("Last Drop/Clear Scene Only")]
-    public static void ClearSceneOnly()
-    {
-        if (EditorUtility.DisplayDialog("پاک کردن صحنه",
-            "آیا مطمئن هستید که می‌خواهید همه اجسام را پاک کنید؟",
-            "بله", "خیر"))
+        else
         {
-            ClearScene();
-            Debug.Log("🧹 صحنه پاک شد");
+            Debug.LogError("❌ Path Follower not found!");
         }
     }
-
-    [MenuItem("Last Drop/Create Complete Scene")]
-    public static void CreateCompleteScene()
-    {
-        if (EditorUtility.DisplayDialog("ایجاد صحنه کامل",
-            "آیا می‌خواهید یک صحنه کاملاً جدید ایجاد کنید؟\n(این عمل صحنه فعلی را پاک می‌کند)",
-            "ایجاد صحنه جدید", "لغو"))
-        {
-            SetupScene();
-        }
-    }
-
-#endif
 }

@@ -1,12 +1,13 @@
 using UnityEngine;
 using UnityEngine.UI;
 using System.Collections;
+using TMPro;
 
 public class UI_Manager : MonoBehaviour
 {
     [Header("UI References")]
     public Slider waterBar;
-    public Text timerText;
+    public TextMeshProUGUI timerText;
     public GameObject winScreen;
     public GameObject loseScreen;
     public Button restartButton;
@@ -15,7 +16,7 @@ public class UI_Manager : MonoBehaviour
 
     [Header("Countdown UI")]
     public GameObject countdownPanel;
-    public Text countdownText;
+    public TextMeshProUGUI countdownText;
 
     // [Header("Visual Effects")]
     // public Animator waterBarAnimator;
@@ -58,12 +59,12 @@ public class UI_Manager : MonoBehaviour
             GameObject countdownTextObj = new GameObject("CountdownText");
             countdownTextObj.transform.SetParent(countdownPanel.transform, false);
 
-            countdownText = countdownTextObj.AddComponent<Text>();
+            countdownText = countdownTextObj.AddComponent<TextMeshProUGUI>();
             countdownText.text = "3";
-            countdownText.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+            countdownText.font = Resources.Load<TMP_FontAsset>("Fonts & Materials/LiberationSans SDF");
             countdownText.fontSize = 120;
             countdownText.color = Color.white;
-            countdownText.alignment = TextAnchor.MiddleCenter;
+            countdownText.alignment = TextAlignmentOptions.Center;
 
             // سایه
             Shadow shadow = countdownTextObj.AddComponent<Shadow>();

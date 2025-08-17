@@ -46,7 +46,7 @@ public class WaterPickup : MonoBehaviour
             // }
 
             // صدا (اختیاری)
-            AudioSource.PlayClipAtPoint(Resources.Load<AudioClip>("WaterPickup"), transform.position);
+            //AudioSource.PlayClipAtPoint(Resources.Load<AudioClip>("WaterPickup"), transform.position);
 
             Destroy(gameObject);
         }
