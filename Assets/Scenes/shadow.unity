@@ -3525,7 +3525,7 @@ MonoBehaviour:
   showCountdown: 1
   waterDrop: {fileID: 179744267}
   sunController: {fileID: 1964587441}
-  uiManager: {fileID: 0}
+  uiManager: {fileID: 2042708572}
   levelEndPoint: {fileID: 43531391}
 --- !u!4 &1933086674
 Transform:
