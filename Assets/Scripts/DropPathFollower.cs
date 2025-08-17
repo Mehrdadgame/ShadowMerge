@@ -15,9 +15,9 @@ public class DropPathFollower : MonoBehaviour
     public float shadowCheckRadius = 0.4f;
     public bool debugShadowDetection = true;
 
-    [Header("Visual Effects")]
-    public ParticleSystem movementTrail;
-    public Transform dropletModel;
+    // [Header("Visual Effects")]
+    // public ParticleSystem movementTrail;
+    // public Transform dropletModel;
 
     // Private variables
     private int currentWaypointIndex = 0;
@@ -175,7 +175,7 @@ public class DropPathFollower : MonoBehaviour
         // روش ۲: مستقیم از ShadowProjector ها (backup)
         if (!inShadow)
         {
-            ShadowProjector[] allShadows = FindObjectsOfType<ShadowProjector>();
+            ShadowProjector[] allShadows = Object.FindObjectsByType<ShadowProjector>(FindObjectsSortMode.None);
             foreach (var shadow in allShadows)
             {
                 if (shadow.IsPointInShadow(transform.position))

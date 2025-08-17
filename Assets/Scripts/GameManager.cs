@@ -73,7 +73,7 @@ public class GameManager : MonoBehaviour
         gameActive = true;
         gameStarted = true;
 
-        GameLoop();
+        StartCoroutine(GameLoop());
     }
 
     IEnumerator GameLoop()

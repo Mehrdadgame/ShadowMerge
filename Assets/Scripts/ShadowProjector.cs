@@ -3,14 +3,27 @@ using UnityEngine;
 public class ShadowProjector : MonoBehaviour
 {
     [Header("Shadow Settings")]
-    public float shadowLength = 5f;
-    public float shadowWidth = 1f;
+    public float shadowLength = 5f;   // ← نگه داشته شد (برای کلاس‌های دیگر)
+    public float shadowWidth = 1f;   // ← نگه داشته شد (برای کلاس‌های دیگر)
     public Material shadowMaterial;
     public LayerMask mergeDetectionLayer = -1;
 
+    [Header("Detection Tuning")]
+    [Tooltip("تحمل عمودی برای تشخیص درون سایه (واحد: متر)")]
+    public float yTolerance = 2f;
+
+    [Tooltip("ارتفاع کلايدر سایه (برای Overlap/Trigger بهتر)")]
+    public float colliderHeight = 2f;
+
+    [Tooltip("جبران مرکز کلايدر در محور Y (نصف ارتفاع کفایت می‌کند)")]
+    public float colliderCenterY = 1f;
+
+    [Header("Runtime")]
     public GameObject shadowMesh;
     public MeshRenderer shadowRenderer;
-    private bool isMerged = false;
+
+    private MeshFilter meshFilter;
+    private bool isMerged = false;    // ← نگه داشته شد
     private Vector3 lastSunPosition;
 
     void Start()
@@ -23,119 +36,117 @@ public class ShadowProjector : MonoBehaviour
     {
         shadowMesh = new GameObject("Shadow_" + gameObject.name);
         shadowMesh.transform.parent = transform;
-        shadowMesh.layer = 8; // Shadow layer (باید در Project Settings تعریف شده باشد)
 
-        MeshFilter meshFilter = shadowMesh.AddComponent<MeshFilter>();
+        // تلاش برای یافتن لایه‌ی "Shadow"، وگرنه 8
+        int shadowLayer = LayerMask.NameToLayer("Shadow");
+        shadowMesh.layer = (shadowLayer == -1) ? 8 : shadowLayer;
+
+        // موقعیت اولیه: پایین‌ترین نقطه پرنت (local یا world هر دو را پوشش می‌دهیم)
+        Vector3 localBottom = CalculateBottomPosition();
+        shadowMesh.transform.localPosition = localBottom;
+
+        meshFilter = shadowMesh.AddComponent<MeshFilter>();
         shadowRenderer = shadowMesh.AddComponent<MeshRenderer>();
 
         if (shadowMaterial == null)
-        {
             shadowMaterial = CreateDefaultShadowMaterial();
-        }
 
         shadowRenderer.material = shadowMaterial;
+
+        // ترتیب رندر برای شفاف‌ها — اگر رندررت از این پشتیبانی کند
         shadowRenderer.sortingOrder = -1;
 
-        // FIXED: Collider بهبود یافته
-        BoxCollider shadowCollider = shadowMesh.AddComponent<BoxCollider>();
-        shadowCollider.isTrigger = true;
-        shadowCollider.size = new Vector3(shadowWidth * 1.2f, 0.2f, shadowLength * 1.1f); // Slightly larger
-        shadowCollider.center = new Vector3(0, 0.1f, shadowLength / 2);
+        // هندسه سایه (یک Quad روی زمین)
+        meshFilter.mesh = CreateQuadMesh();
 
-        // Tag مخصوص shadow
+        // کلايدر برای تشخیص راحت‌تر (Trigger و کمی بلندتر)
+        var shadowCollider = shadowMesh.AddComponent<BoxCollider>();
+        shadowCollider.isTrigger = true;
+        shadowCollider.size = new Vector3(shadowWidth * 1.2f, colliderHeight, shadowLength * 1.1f);
+        shadowCollider.center = new Vector3(0f, colliderCenterY, shadowLength / 2f);
+
         shadowMesh.tag = "Shadow";
 
-        meshFilter.mesh = CreateQuadMesh();
-    }
-    public bool IsPointInShadowImproved(Vector3 point)
-    {
-        if (shadowMesh == null || shadowRenderer == null) return false;
-
-        // روش ۱: Bounds check با tolerance بیشتر
-        Bounds shadowBounds = shadowRenderer.bounds;
-        shadowBounds.Expand(0.5f); // Increased tolerance
-
-        if (!shadowBounds.Contains(point)) return false;
-
-        // روش ۲: Local space check (دقیق‌تر)
-        Vector3 localPoint = shadowMesh.transform.InverseTransformPoint(point);
-
-        return (localPoint.x >= -shadowWidth / 2 - 0.2f && localPoint.x <= shadowWidth / 2 + 0.2f &&
-                localPoint.z >= -0.2f && localPoint.z <= shadowLength + 0.2f &&
-                localPoint.y >= -0.5f && localPoint.y <= 0.5f);
-    }
-    Material CreateDefaultShadowMaterial()
-    {
-        Material mat = new Material(Shader.Find("Standard"));
-        mat.SetFloat("_Mode", 3); // Transparent mode
-        mat.SetInt("_SrcBlend", (int)UnityEngine.Rendering.BlendMode.SrcAlpha);
-        mat.SetInt("_DstBlend", (int)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
-        mat.SetInt("_ZWrite", 0);
-        mat.DisableKeyword("_ALPHATEST_ON");
-        mat.EnableKeyword("_ALPHABLEND_ON");
-        mat.DisableKeyword("_ALPHAPREMULTIPLY_ON");
-        mat.renderQueue = 3000;
-        mat.color = new Color(0.1f, 0.1f, 0.1f, 0.6f);
-        return mat;
+        // یک بار هم پوزیشن جهانی را دقیقاً بچسبانیم به کف
+        shadowMesh.transform.position = GetBottomWorldPosition();
+        shadowMesh.transform.rotation = Quaternion.identity;
     }
 
-    Mesh CreateQuadMesh()
+    // پایین‌ترین نقطه در فضای محلی نسبت به پرنت
+    Vector3 CalculateBottomPosition()
     {
-        Mesh mesh = new Mesh();
-        mesh.name = "ShadowQuad";
+        Renderer objectRenderer = GetComponent<Renderer>();
+        if (objectRenderer != null)
+        {
+            float bottomY = objectRenderer.bounds.min.y - transform.position.y;
+            return new Vector3(0, bottomY, 0);
+        }
 
-        Vector3[] vertices = new Vector3[4];
-        int[] triangles = new int[6];
-        Vector2[] uvs = new Vector2[4];
+        Collider objectCollider = GetComponent<Collider>();
+        if (objectCollider != null)
+        {
+            float bottomY = objectCollider.bounds.min.y - transform.position.y;
+            return new Vector3(0, bottomY, 0);
+        }
 
-        vertices[0] = new Vector3(-shadowWidth / 2, 0, 0);
-        vertices[1] = new Vector3(shadowWidth / 2, 0, 0);
-        vertices[2] = new Vector3(-shadowWidth / 2, 0, shadowLength);
-        vertices[3] = new Vector3(shadowWidth / 2, 0, shadowLength);
+        // fallback
+        return new Vector3(0, -0.4f, 0);
+    }
 
-        triangles[0] = 0; triangles[1] = 2; triangles[2] = 1;
-        triangles[3] = 2; triangles[4] = 3; triangles[5] = 1;
+    // پایین‌ترین نقطه در فضای جهانی
+    Vector3 GetBottomWorldPosition()
+    {
+        Renderer objectRenderer = GetComponent<Renderer>();
+        if (objectRenderer != null)
+        {
+            return new Vector3(
+                transform.position.x,
+                objectRenderer.bounds.min.y,
+                transform.position.z
+            );
+        }
 
-        uvs[0] = new Vector2(0, 0);
-        uvs[1] = new Vector2(1, 0);
-        uvs[2] = new Vector2(0, 1);
-        uvs[3] = new Vector2(1, 1);
+        Collider objectCollider = GetComponent<Collider>();
+        if (objectCollider != null)
+        {
+            return new Vector3(
+                transform.position.x,
+                objectCollider.bounds.min.y,
+                transform.position.z
+            );
+        }
 
-        mesh.vertices = vertices;
-        mesh.triangles = triangles;
-        mesh.uv = uvs;
-        mesh.RecalculateNormals();
-        mesh.RecalculateBounds();
-
-        return mesh;
+        return transform.position; // fallback
     }
 
     public void UpdateShadow(Vector3 sunPosition)
     {
-        // NULL CHECK - این خط مشکل رو حل میکنه
         if (shadowMesh == null || shadowRenderer == null || isMerged)
             return;
 
         if (sunPosition == lastSunPosition)
             return;
 
+        // جهت سایه (روی زمین)
         Vector3 direction = (transform.position - sunPosition).normalized;
-        direction.y = 0; // Keep shadow on ground
+        direction.y = 0f;
 
         float angle = Mathf.Atan2(direction.x, direction.z) * Mathf.Rad2Deg;
 
-        // Smooth rotation
-        Quaternion targetRotation = Quaternion.Euler(0, angle, 0);
+        // چرخش نرم
+        Quaternion targetRotation = Quaternion.Euler(0f, angle, 0f);
         shadowMesh.transform.rotation = Quaternion.Lerp(
             shadowMesh.transform.rotation,
             targetRotation,
             Time.deltaTime * 8f
         );
 
-        shadowMesh.transform.position = transform.position;
+        // سایه در پایین‌ترین نقطه پرنت می‌نشیند
+        shadowMesh.transform.position = GetBottomWorldPosition();
+
         lastSunPosition = sunPosition;
 
-        // Check for potential merges
+        // بررسی ادغام
         CheckForMerge();
     }
 
@@ -143,16 +154,17 @@ public class ShadowProjector : MonoBehaviour
     {
         if (isMerged || shadowMesh == null) return;
 
+        // جعبه‌ای در امتداد سایه برای تشخیص هم‌پوشانی
         Collider[] nearbyColliders = Physics.OverlapBox(
-            shadowMesh.transform.position + shadowMesh.transform.forward * shadowLength / 2,
-            new Vector3(shadowWidth / 2, 0.1f, shadowLength / 2),
+            shadowMesh.transform.position + shadowMesh.transform.forward * shadowLength / 2f,
+            new Vector3(shadowWidth / 2f, colliderHeight / 2f, shadowLength / 2f),
             shadowMesh.transform.rotation,
             mergeDetectionLayer
         );
 
-        foreach (var collider in nearbyColliders)
+        foreach (var col in nearbyColliders)
         {
-            ShadowProjector otherShadow = collider.GetComponentInParent<ShadowProjector>();
+            ShadowProjector otherShadow = col.GetComponentInParent<ShadowProjector>();
             if (otherShadow != null && otherShadow != this && !otherShadow.isMerged && !isMerged)
             {
                 Vector3 mergePosition = Vector3.Lerp(
@@ -172,55 +184,118 @@ public class ShadowProjector : MonoBehaviour
         isMerged = true;
         otherShadow.isMerged = true;
 
-        // Visual feedback
+        // Feedback تصویری
         if (shadowRenderer != null && shadowRenderer.material != null)
-        {
-            shadowRenderer.material.color = new Color(0.2f, 0.2f, 0.2f, 0.9f); // Darker merged shadow
-        }
+            shadowRenderer.material.color = new Color(0.2f, 0.2f, 0.2f, 0.9f);
 
         if (otherShadow.shadowRenderer != null && otherShadow.shadowRenderer.material != null)
-        {
             otherShadow.shadowRenderer.material.color = new Color(0.2f, 0.2f, 0.2f, 0.9f);
-        }
 
-        // Effects
+        // افکت/صدا (اختیاری)
         ParticleManager.Instance?.PlayShadowMerge(mergePosition);
         AudioManager.Instance?.PlayShadowMerge();
 
-        // Analytics
+        // آنالیتیکس (اختیاری)
         if (GameManager.Instance != null)
-        {
             AnalyticsTracker.TrackShadowMerge(GameManager.Instance.currentLevel, 1);
-        }
 
-        // اضافه کردن کومبو برای ادغام سایه
+        // کومبو (اختیاری)
         ComboSystem.Instance?.AddShadowMerge();
 
         Debug.Log($"✨ سایه‌ها ادغام شدند: {gameObject.name} + {otherShadow.gameObject.name}");
     }
 
-    public bool IsPointInShadow(Vector3 point)
+    // نسخه‌ی اصلی که DropPathFollower ازش استفاده می‌کند
+    public bool IsPointInShadow(Vector3 worldPoint)
     {
         if (shadowMesh == null || shadowRenderer == null) return false;
 
-        // تحمل بیشتر برای تشخیص سایه
-        Bounds shadowBounds = shadowRenderer.bounds;
-        shadowBounds.Expand(0.3f); // Increased tolerance
-        return shadowBounds.Contains(point);
+        // ۱) چک سریع Bounds با کمی توسعه
+        Bounds b = shadowRenderer.bounds;
+        b.Expand(0.3f);
+        if (!b.Contains(worldPoint)) return false;
+
+        // ۲) چک دقیق در فضای محلی
+        Vector3 local = shadowMesh.transform.InverseTransformPoint(worldPoint);
+        return (local.x >= -shadowWidth / 2f && local.x <= shadowWidth / 2f) &&
+               (local.z >= 0f && local.z <= shadowLength) &&
+               (local.y >= -yTolerance && local.y <= yTolerance);
     }
 
+    // نگه داشته شد برای سازگاری اگر جای دیگری صدا زده می‌شه
+    public bool IsPointInShadowImproved(Vector3 worldPoint) => IsPointInShadow(worldPoint);
+
+    // نگه‌داشتن API قبلی
     public bool IsMerged() => isMerged;
 
-    // بهبود سایه برای قطره آب
-    public float GetShadowStrength(Vector3 point)
+    Material CreateDefaultShadowMaterial()
     {
-        if (!IsPointInShadow(point) || shadowMesh == null) return 0f;
+        Material mat = new Material(Shader.Find("Standard"));
+        // Transparent
+        mat.SetFloat("_Mode", 3);
+        mat.SetInt("_SrcBlend", (int)UnityEngine.Rendering.BlendMode.SrcAlpha);
+        mat.SetInt("_DstBlend", (int)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
+        mat.SetInt("_ZWrite", 0);
+        mat.DisableKeyword("_ALPHATEST_ON");
+        mat.EnableKeyword("_ALPHABLEND_ON");
+        mat.DisableKeyword("_ALPHAPREMULTIPLY_ON");
+        mat.renderQueue = 3000;
+        mat.color = new Color(0.1f, 0.1f, 0.1f, 0.6f);
+        return mat;
+    }
+    // شدت سایه در نقطه‌ی worldPoint (۰=لبه/بیرون، ۱=مرکز)
+    public float GetShadowStrength(Vector3 worldPoint)
+    {
+        if (shadowMesh == null || !IsPointInShadow(worldPoint))
+            return 0f;
 
-        Vector3 localPoint = shadowMesh.transform.InverseTransformPoint(point);
-        float distanceFromCenter = Vector3.Distance(localPoint, Vector3.zero);
-        float maxDistance = shadowLength * 0.5f;
+        // به فضای محلی سایه ببریم
+        Vector3 local = shadowMesh.transform.InverseTransformPoint(worldPoint);
 
-        return Mathf.Clamp01(1f - (distanceFromCenter / maxDistance));
+        // مرکز مستطیلِ سایه در فضای محلی
+        float halfW = shadowWidth * 0.5f;
+        float halfL = shadowLength * 0.5f;
+        float cx = 0f;
+        float cz = halfL;
+
+        // فاصله‌های نرمال‌شده تا مرکز در دو محور
+        float dx = Mathf.Abs(local.x - cx) / halfW;     // 0 در مرکز تا 1 در لبه x
+        float dz = Mathf.Abs(local.z - cz) / halfL;     // 0 در مرکز تا 1 در لبه z
+
+        // قدرت سایه را بر اساس دوری از مرکز بگیریم (لبه صفر، مرکز یک)
+        float strength = 1f - Mathf.Max(dx, dz);
+
+        return Mathf.Clamp01(strength);
+    }
+
+    Mesh CreateQuadMesh()
+    {
+        Mesh mesh = new Mesh { name = "ShadowQuad" };
+
+        Vector3[] vertices = new Vector3[4];
+        int[] triangles = new int[6];
+        Vector2[] uvs = new Vector2[4];
+
+        vertices[0] = new Vector3(-shadowWidth / 2f, 0f, 0f);
+        vertices[1] = new Vector3(shadowWidth / 2f, 0f, 0f);
+        vertices[2] = new Vector3(-shadowWidth / 2f, 0f, shadowLength);
+        vertices[3] = new Vector3(shadowWidth / 2f, 0f, shadowLength);
+
+        triangles[0] = 0; triangles[1] = 2; triangles[2] = 1;
+        triangles[3] = 2; triangles[4] = 3; triangles[5] = 1;
+
+        uvs[0] = new Vector2(0f, 0f);
+        uvs[1] = new Vector2(1f, 0f);
+        uvs[2] = new Vector2(0f, 1f);
+        uvs[3] = new Vector2(1f, 1f);
+
+        mesh.vertices = vertices;
+        mesh.triangles = triangles;
+        mesh.uv = uvs;
+
+        mesh.RecalculateNormals();
+        mesh.RecalculateBounds();
+        return mesh;
     }
 
     void OnDrawGizmosSelected()
@@ -229,7 +304,10 @@ public class ShadowProjector : MonoBehaviour
         {
             Gizmos.color = isMerged ? Color.red : Color.blue;
             Gizmos.matrix = shadowMesh.transform.localToWorldMatrix;
-            Gizmos.DrawWireCube(new Vector3(0, 0, shadowLength / 2), new Vector3(shadowWidth, 0.1f, shadowLength));
+            Gizmos.DrawWireCube(
+                new Vector3(0f, colliderCenterY, shadowLength / 2f),
+                new Vector3(shadowWidth, colliderHeight, shadowLength)
+            );
         }
     }
 }
