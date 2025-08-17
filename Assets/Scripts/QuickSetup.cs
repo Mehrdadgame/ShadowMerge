@@ -237,8 +237,8 @@ public class QuickSetupFixed : MonoBehaviour
         pathFollower.moveSpeed = 4f;
         pathFollower.rotationSpeed = 8f;
         pathFollower.arrivalThreshold = 0.4f;
-        pathFollower.shadowLayerMask = 1 << 8; // Shadow layer
-        pathFollower.shadowCheckRadius = 0.5f;
+        // pathFollower.shadowLayerMask = 1 << 8; // Shadow layer
+        // pathFollower.shadowCheckRadius = 0.5f;
         pathFollower.debugShadowDetection = true;
 
         // حذف WaterDrop component قدیمی اگر وجود داشت

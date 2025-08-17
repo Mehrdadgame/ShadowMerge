@@ -1,7 +1,6 @@
 using System.Collections;
 using UnityEngine;
 
-
 public class DropPathFollower : MonoBehaviour
 {
     [Header("Path Following")]
@@ -10,24 +9,17 @@ public class DropPathFollower : MonoBehaviour
     public float rotationSpeed = 8f;
     public float arrivalThreshold = 0.3f;
 
-    [Header("Shadow Detection - FIXED")]
-    public LayerMask shadowLayerMask = 1 << 8; // Layer 8 = Shadow
-    public float shadowCheckRadius = 0.4f;
+    [Header("Shadow Detection - TRIGGER BASED")]
     public bool debugShadowDetection = true;
-
-    // [Header("Visual Effects")]
-    // public ParticleSystem movementTrail;
-    // public Transform dropletModel;
 
     // Private variables
     private int currentWaypointIndex = 0;
     private bool isMoving = false;
     private Rigidbody rb;
-    private bool inShadow = false;
-    private ShadowProjector currentShadow;
 
-    // Shadow detection - چندگانه
-    private Collider[] shadowColliders = new Collider[10];
+    // Shadow detection - فقط Trigger
+    private bool inShadow = false;
+    private ShadowProjector currentShadow = null;
 
     void Start()
     {
@@ -50,8 +42,75 @@ public class DropPathFollower : MonoBehaviour
         {
             Debug.LogError("❌ Path تنظیم نشده! WaypointPath component اضافه کنید.");
         }
+    }
 
-        StartCoroutine(ShadowDetectionLoop());
+    // ===== TRIGGER-BASED SHADOW DETECTION =====
+    void OnTriggerEnter(Collider other)
+    {
+        // بررسی اگر Shadow است
+        if (other.CompareTag("Shadow"))
+        {
+            ShadowProjector shadow = other.GetComponentInParent<ShadowProjector>();
+            if (shadow != null)
+            {
+                inShadow = true;
+                currentShadow = shadow;
+
+                if (debugShadowDetection)
+                {
+                    Debug.Log($"🛡️ وارد سایه شد: {shadow.name}");
+                }
+            }
+        }
+
+        // WaterPickup هم اینجا
+        if (other.CompareTag("WaterPickup"))
+        {
+            WaterPickup pickup = other.GetComponent<WaterPickup>();
+            if (pickup != null)
+            {
+                GameManager.Instance?.AddWater(pickup.waterAmount);
+                Destroy(other.gameObject);
+            }
+        }
+    }
+
+    void OnTriggerStay(Collider other)
+    {
+        // اطمینان از اینکه هنوز در سایه هستیم
+        if (other.CompareTag("Shadow") && !inShadow)
+        {
+            ShadowProjector shadow = other.GetComponentInParent<ShadowProjector>();
+            if (shadow != null)
+            {
+                inShadow = true;
+                currentShadow = shadow;
+
+                if (debugShadowDetection)
+                {
+                    Debug.Log($"🛡️ هنوز در سایه: {shadow.name}");
+                }
+            }
+        }
+    }
+
+    void OnTriggerExit(Collider other)
+    {
+        // خروج از سایه
+        if (other.CompareTag("Shadow"))
+        {
+            ShadowProjector shadow = other.GetComponentInParent<ShadowProjector>();
+            if (shadow != null && currentShadow == shadow)
+            {
+                inShadow = false;
+                currentShadow = null;
+
+                if (debugShadowDetection)
+                {
+                    Debug.Log($"☀️ از سایه خارج شد: {shadow.name}");
+                }
+            }
+        }
     }
 
     IEnumerator FollowPath()
@@ -68,10 +127,9 @@ public class DropPathFollower : MonoBehaviour
             if (currentWP.mustBeInShadow && !inShadow)
             {
                 Debug.LogWarning($"⚠️ Waypoint {currentWaypointIndex} باید در سایه باشد ولی نیست!");
-                // می‌تونید عملکرد خاصی اضافه کنید (مثل توقف یا جریمه)
             }
 
-            // توقف در waypoint (اگر تعریف شده)
+            // توقف در waypoint
             if (currentWP.waitTime > 0)
             {
                 yield return new WaitForSeconds(currentWP.waitTime);
@@ -84,26 +142,28 @@ public class DropPathFollower : MonoBehaviour
         isMoving = false;
         Debug.Log("🎯 به پایان مسیر رسیدیم!");
 
-        // اعلام برد به GameManager
         if (GameManager.Instance != null)
         {
-            // فرض می‌کنیم آخرین waypoint همان levelEndPoint است
-            GameManager.Instance.WinLevel(); // این method را public کنید
+            GameManager.Instance.WinLevel();
         }
     }
 
     IEnumerator MoveToWaypoint(int waypointIndex)
     {
-        if (waypointIndex >= path.GetWaypointCount() && !GameManager.Instance.IsGameStarted()) yield break;
+        if (waypointIndex >= path.GetWaypointCount()) yield break;
 
         Vector3 targetPos = path.GetWaypointPosition(waypointIndex);
 
         while (Vector3.Distance(transform.position, targetPos) > arrivalThreshold)
         {
-            // محاسبه جهت حرکت
+            if (GameManager.Instance != null && !GameManager.Instance.IsGameStarted())
+            {
+                yield return null;
+                continue;
+            }
+
             Vector3 direction = (targetPos - transform.position).normalized;
 
-            // حرکت
             if (rb != null)
             {
                 Vector3 moveVector = direction * moveSpeed * Time.fixedDeltaTime;
@@ -118,7 +178,6 @@ public class DropPathFollower : MonoBehaviour
                 );
             }
 
-            // چرخش به سمت حرکت
             if (direction != Vector3.zero)
             {
                 Quaternion targetRotation = Quaternion.LookRotation(direction);
@@ -135,88 +194,17 @@ public class DropPathFollower : MonoBehaviour
         Debug.Log($"✅ رسیدیم به Waypoint {waypointIndex}");
     }
 
-    // ====== FIXED Shadow Detection System ======
-    IEnumerator ShadowDetectionLoop()
-    {
-        while (true)
-        {
-            CheckShadowStatus();
-            yield return new WaitForSeconds(0.1f); // بررسی هر 100ms
-        }
-    }
-
-    void CheckShadowStatus()
-    {
-        inShadow = false;
-        currentShadow = null;
-
-        // روش ۱: Physics.OverlapSphere - دقیق‌ترین روش
-        int hitCount = Physics.OverlapSphereNonAlloc(
-            transform.position,
-            shadowCheckRadius,
-            shadowColliders,
-            shadowLayerMask
-        );
-
-        if (hitCount > 0)
-        {
-            for (int i = 0; i < hitCount; i++)
-            {
-                ShadowProjector shadow = shadowColliders[i].GetComponentInParent<ShadowProjector>();
-                if (shadow != null && shadow.IsPointInShadow(transform.position))
-                {
-                    inShadow = true;
-                    currentShadow = shadow;
-                    break;
-                }
-            }
-        }
-
-        // روش ۲: مستقیم از ShadowProjector ها (backup)
-        if (!inShadow)
-        {
-            ShadowProjector[] allShadows = Object.FindObjectsByType<ShadowProjector>(FindObjectsSortMode.None);
-            foreach (var shadow in allShadows)
-            {
-                if (shadow.IsPointInShadow(transform.position))
-                {
-                    inShadow = true;
-                    currentShadow = shadow;
-                    break;
-                }
-            }
-        }
-
-        if (debugShadowDetection)
-        {
-            Debug.Log($"🔍 Shadow Status: {(inShadow ? "IN SHADOW" : "IN SUNLIGHT")} | Current: {currentShadow?.name}");
-        }
-    }
-
-    // Getters برای GameManager
+    // Public methods برای GameManager
     public bool IsInShadow() => inShadow;
     public ShadowProjector GetCurrentShadow() => currentShadow;
     public bool IsMoving() => isMoving;
     public int GetCurrentWaypointIndex() => currentWaypointIndex;
 
-    void OnTriggerEnter(Collider other)
-    {
-        if (other.CompareTag("WaterPickup"))
-        {
-            WaterPickup pickup = other.GetComponent<WaterPickup>();
-            if (pickup != null)
-            {
-                GameManager.Instance?.AddWater(pickup.waterAmount);
-                Destroy(other.gameObject);
-            }
-        }
-    }
-
     void OnDrawGizmosSelected()
     {
-        // Shadow detection radius
+        // نمایش وضعیت سایه
         Gizmos.color = inShadow ? Color.blue : Color.red;
-        Gizmos.DrawWireSphere(transform.position, shadowCheckRadius);
+        Gizmos.DrawWireSphere(transform.position, 0.5f);
 
         // Current waypoint target
         if (path != null && currentWaypointIndex < path.GetWaypointCount())
@@ -225,6 +213,13 @@ public class DropPathFollower : MonoBehaviour
             Vector3 targetPos = path.GetWaypointPosition(currentWaypointIndex);
             Gizmos.DrawLine(transform.position, targetPos);
             Gizmos.DrawWireSphere(targetPos, arrivalThreshold);
+        }
+
+        // اتصال به سایه فعلی
+        if (Application.isPlaying && inShadow && currentShadow != null)
+        {
+            Gizmos.color = Color.cyan;
+            Gizmos.DrawLine(transform.position, currentShadow.transform.position);
         }
     }
 }

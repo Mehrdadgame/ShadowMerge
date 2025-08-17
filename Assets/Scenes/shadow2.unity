@@ -761,9 +761,7 @@ MonoBehaviour:
   shadowLength: 3
   shadowWidth: 2
   shadowMaterial: {fileID: 1877965701}
-  mergeDetectionLayer:
-    serializedVersion: 2
-    m_Bits: 768
+  colliderHeight: 2
   shadowMesh: {fileID: 0}
   shadowRenderer: {fileID: 0}
 --- !u!23 &98260002
@@ -1005,6 +1003,8 @@ GameObject:
   - component: {fileID: 132748358}
   - component: {fileID: 132748357}
   - component: {fileID: 132748356}
+  - component: {fileID: 132748362}
+  - component: {fileID: 132748363}
   m_Layer: 0
   m_Name: WaterDrop
   m_TagString: Player
@@ -1025,14 +1025,10 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   path: {fileID: 1500608616}
-  moveSpeed: 0.2
-  rotationSpeed: 8
+  moveSpeed: 0.8
+  rotationSpeed: 5
   arrivalThreshold: 0.2
-  shadowLayerMask:
-    serializedVersion: 2
-    m_Bits: 768
-  shadowCheckRadius: 1
-  debugShadowDetection: 1
+  debugShadowDetection: 0
 --- !u!54 &132748357
 Rigidbody:
   m_ObjectHideFlags: 0
@@ -1149,6 +1145,36 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &132748362
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 132748355}
+  m_Enabled: 0
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 0be0da19759819e428ca06d17d52918d, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  shadowLayerMask:
+    serializedVersion: 2
+    m_Bits: 4294967295
+  checkRadius: 0.5
+--- !u!114 &132748363
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 132748355}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b8cacafdf1b99d94ea722378018e6777, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  debugMode: 0
+  checkDistance: 0.46
 --- !u!1 &157787286
 GameObject:
   m_ObjectHideFlags: 0
@@ -1617,7 +1643,7 @@ CapsuleCollider:
     serializedVersion: 2
     m_Bits: 0
   m_LayerOverridePriority: 0
-  m_IsTrigger: 0
+  m_IsTrigger: 1
   m_ProvidesContacts: 0
   m_Enabled: 1
   serializedVersion: 2
@@ -1817,7 +1843,7 @@ CapsuleCollider:
     serializedVersion: 2
     m_Bits: 0
   m_LayerOverridePriority: 0
-  m_IsTrigger: 0
+  m_IsTrigger: 1
   m_ProvidesContacts: 0
   m_Enabled: 1
   serializedVersion: 2
@@ -1848,7 +1874,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!4 &398212011
 Transform:
   m_ObjectHideFlags: 0
@@ -2352,9 +2378,7 @@ MonoBehaviour:
   shadowLength: 4.5
   shadowWidth: 3
   shadowMaterial: {fileID: 2016052629}
-  mergeDetectionLayer:
-    serializedVersion: 2
-    m_Bits: 768
+  colliderHeight: 2
   shadowMesh: {fileID: 0}
   shadowRenderer: {fileID: 0}
 --- !u!23 &726421051
@@ -7620,9 +7644,7 @@ MonoBehaviour:
   shadowLength: 3.6000001
   shadowWidth: 2.4
   shadowMaterial: {fileID: 1758049191}
-  mergeDetectionLayer:
-    serializedVersion: 2
-    m_Bits: 768
+  colliderHeight: 2
   shadowMesh: {fileID: 0}
   shadowRenderer: {fileID: 0}
 --- !u!23 &938253104
@@ -8448,7 +8470,7 @@ MonoBehaviour:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1089124789}
-  m_Enabled: 0
+  m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: f4688fdb7df04437aeb418b961361dc5, type: 3}
   m_Name: 
@@ -8461,7 +8483,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: New Text
+  m_text: 
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
   m_sharedMaterial: {fileID: 2180264, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
@@ -8569,7 +8591,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 90f74318c2d956f4399a3a695b7132bb, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  waterDecayRate: 0.5
+  waterDecayRate: 0.1
   sunlightDecayRate: 8
   levelTime: 90
   currentLevel: 1
@@ -8579,6 +8601,8 @@ MonoBehaviour:
   sunController: {fileID: 1329345473}
   uiManager: {fileID: 2037866971}
   levelEndPoint: {fileID: 688246907}
+  debugShadowLogic: 0
+  lastShadowState: 0
 --- !u!4 &1093898692
 Transform:
   m_ObjectHideFlags: 0
@@ -8760,9 +8784,7 @@ MonoBehaviour:
   shadowLength: 3.6000001
   shadowWidth: 2.4
   shadowMaterial: {fileID: 1482211751}
-  mergeDetectionLayer:
-    serializedVersion: 2
-    m_Bits: 4294967295
+  colliderHeight: 2
   shadowMesh: {fileID: 0}
   shadowRenderer: {fileID: 0}
 --- !u!23 &1184209282
@@ -9434,7 +9456,7 @@ CapsuleCollider:
     serializedVersion: 2
     m_Bits: 0
   m_LayerOverridePriority: 0
-  m_IsTrigger: 0
+  m_IsTrigger: 1
   m_ProvidesContacts: 0
   m_Enabled: 1
   serializedVersion: 2
@@ -9609,7 +9631,7 @@ MonoBehaviour:
   sunLight: {fileID: 615124178}
   shadowCasterLayer:
     serializedVersion: 2
-    m_Bits: 4294967295
+    m_Bits: 512
   shadowMaterial: {fileID: 2100000, guid: 9a2a5b8864e9f4348b39334c838c767f, type: 2}
 --- !u!4 &1329345474
 Transform:
@@ -9859,9 +9881,7 @@ MonoBehaviour:
   shadowLength: 5
   shadowWidth: 4
   shadowMaterial: {fileID: 2100000, guid: 9a2a5b8864e9f4348b39334c838c767f, type: 2}
-  mergeDetectionLayer:
-    serializedVersion: 2
-    m_Bits: 512
+  colliderHeight: 2
   shadowMesh: {fileID: 0}
   shadowRenderer: {fileID: 0}
 --- !u!23 &1464622563
@@ -11863,7 +11883,7 @@ CapsuleCollider:
     serializedVersion: 2
     m_Bits: 0
   m_LayerOverridePriority: 0
-  m_IsTrigger: 0
+  m_IsTrigger: 1
   m_ProvidesContacts: 0
   m_Enabled: 1
   serializedVersion: 2

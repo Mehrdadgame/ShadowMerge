@@ -42,17 +42,24 @@ public class WaterDrop : MonoBehaviour
 
     void CheckShadowStatus()
     {
+        bool wasInShadow = inShadow; // ذخیره وضعیت قبلی برای Debug
         inShadow = false;
         currentShadow = null;
 
         ShadowProjector[] shadows = FindObjectsOfType<ShadowProjector>();
         float closestDistance = Mathf.Infinity;
-
+        Debug.Log($"{shadows.Length} Count");
         foreach (var shadow in shadows)
         {
+            // بررسی null safety
+            if (shadow == null) continue;
+
+            // بررسی اینکه آیا نقطه در سایه است
             if (shadow.IsPointInShadow(transform.position))
             {
                 float distance = Vector3.Distance(transform.position, shadow.transform.position);
+
+                // انتخاب نزدیک‌ترین سایه
                 if (distance < closestDistance)
                 {
                     closestDistance = distance;
@@ -61,8 +68,95 @@ public class WaterDrop : MonoBehaviour
                 }
             }
         }
+
+        // Debug اطلاعات (فقط وقتی وضعیت تغییر کند)
+        if (wasInShadow != inShadow)
+        {
+            if (inShadow)
+            {
+                Debug.Log($"🛡️ INTTER SHDOW {currentShadow.name} (DICTANSE: {closestDistance:F1})");
+            }
+            else
+            {
+                Debug.Log($"☀️ OUT SHADOW");
+            }
+        }
     }
 
+    // ========== نسخه بهبود یافته با Performance و Debug بیشتر ==========
+    void CheckShadowStatusImproved()
+    {
+        bool wasInShadow = inShadow;
+        ShadowProjector previousShadow = currentShadow;
+
+        inShadow = false;
+        currentShadow = null;
+
+        // کش کردن shadows برای کارایی بهتر
+        if (cachedShadows == null || Time.time - lastShadowCacheTime > 1f)
+        {
+            cachedShadows = FindObjectsOfType<ShadowProjector>();
+            lastShadowCacheTime = Time.time;
+        }
+
+        float closestDistance = Mathf.Infinity;
+        int shadowsChecked = 0;
+        int shadowsInRange = 0;
+
+        foreach (var shadow in cachedShadows)
+        {
+            if (shadow == null) continue;
+            shadowsChecked++;
+
+            // بهینه‌سازی: اول فاصله را چک کن
+            float distance = Vector3.Distance(transform.position, shadow.transform.position);
+
+            // اگر خیلی دور است، IsPointInShadow را صدا نزن
+            if (distance > 10f) continue; // حد تقریبی
+            shadowsInRange++;
+
+            // حالا بررسی دقیق
+            if (shadow.IsPointInShadow(transform.position))
+            {
+                if (distance < closestDistance)
+                {
+                    closestDistance = distance;
+                    inShadow = true;
+                    currentShadow = shadow;
+                }
+            }
+        }
+
+        // Debug کامل (فقط هر 2 ثانیه یکبار)
+        if (Time.time - lastDebugTime > 2f)
+        {
+            Debug.Log($"🔍 Shadow Check: {shadowsChecked} کل، {shadowsInRange} در محدوده، نتیجه: {(inShadow ? "IN SHADOW" : "IN SUNLIGHT")}");
+            lastDebugTime = Time.time;
+        }
+
+        // Debug تغییر وضعیت
+        if (wasInShadow != inShadow)
+        {
+            if (inShadow)
+            {
+                Debug.Log($"🛡️ وارد سایه شد: {currentShadow.name} (فاصله: {closestDistance:F1})");
+            }
+            else
+            {
+                Debug.Log($"☀️ از سایه خارج شد (قبلی: {previousShadow?.name})");
+            }
+        }
+        // Debug تغییر سایه (بدون تغییر وضعیت کلی)
+        else if (inShadow && currentShadow != previousShadow)
+        {
+            Debug.Log($"🔄 تغییر سایه: {previousShadow?.name} -> {currentShadow?.name}");
+        }
+    }
+
+    // متغیرهای کمکی برای نسخه بهبود یافته
+    private ShadowProjector[] cachedShadows;
+    private float lastShadowCacheTime = 0f;
+    private float lastDebugTime = 0f;
     void MoveToTarget()
     {
         if (!GameManager.Instance.IsGameStarted())

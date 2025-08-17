@@ -4959,6 +4959,6 @@ MonoBehaviour:
   rotationSpeed: 5
   shadowLayer:
     serializedVersion: 2
-    m_Bits: 512
+    m_Bits: 768
   movementTrail: {fileID: 1601690579657416091}
   dropletModel: {fileID: 7462616755369851988}
