@@ -23,12 +23,19 @@ public class ShadowProjector : MonoBehaviour
     {
         shadowMesh = new GameObject("Shadow_" + gameObject.name);
         shadowMesh.transform.parent = transform;
-        shadowMesh.layer = LayerMask.NameToLayer("Shadow");
+        shadowMesh.layer = LayerMask.NameToLayer("Default"); // Changed from Shadow layer
 
         MeshFilter meshFilter = shadowMesh.AddComponent<MeshFilter>();
         shadowRenderer = shadowMesh.AddComponent<MeshRenderer>();
+
+        // Create default shadow material if none provided
+        if (shadowMaterial == null)
+        {
+            shadowMaterial = CreateDefaultShadowMaterial();
+        }
+
         shadowRenderer.material = shadowMaterial;
-        shadowRenderer.sortingOrder = -1; // زیر اجسام دیگر
+        shadowRenderer.sortingOrder = -1;
 
         // Add collider for shadow detection
         BoxCollider shadowCollider = shadowMesh.AddComponent<BoxCollider>();
@@ -38,6 +45,21 @@ public class ShadowProjector : MonoBehaviour
 
         // Create quad mesh for shadow
         meshFilter.mesh = CreateQuadMesh();
+    }
+
+    Material CreateDefaultShadowMaterial()
+    {
+        Material mat = new Material(Shader.Find("Standard"));
+        mat.SetFloat("_Mode", 3); // Transparent mode
+        mat.SetInt("_SrcBlend", (int)UnityEngine.Rendering.BlendMode.SrcAlpha);
+        mat.SetInt("_DstBlend", (int)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
+        mat.SetInt("_ZWrite", 0);
+        mat.DisableKeyword("_ALPHATEST_ON");
+        mat.EnableKeyword("_ALPHABLEND_ON");
+        mat.DisableKeyword("_ALPHAPREMULTIPLY_ON");
+        mat.renderQueue = 3000;
+        mat.color = new Color(0.1f, 0.1f, 0.1f, 0.6f);
+        return mat;
     }
 
     Mesh CreateQuadMesh()
@@ -73,7 +95,12 @@ public class ShadowProjector : MonoBehaviour
 
     public void UpdateShadow(Vector3 sunPosition)
     {
-        if (isMerged || sunPosition == lastSunPosition) return;
+        // NULL CHECK - این خط مشکل رو حل میکنه
+        if (shadowMesh == null || shadowRenderer == null || isMerged)
+            return;
+
+        if (sunPosition == lastSunPosition)
+            return;
 
         Vector3 direction = (transform.position - sunPosition).normalized;
         direction.y = 0; // Keep shadow on ground
@@ -97,7 +124,7 @@ public class ShadowProjector : MonoBehaviour
 
     void CheckForMerge()
     {
-        if (isMerged) return;
+        if (isMerged || shadowMesh == null) return;
 
         Collider[] nearbyColliders = Physics.OverlapBox(
             shadowMesh.transform.position + shadowMesh.transform.forward * shadowLength / 2,
@@ -111,7 +138,6 @@ public class ShadowProjector : MonoBehaviour
             ShadowProjector otherShadow = collider.GetComponentInParent<ShadowProjector>();
             if (otherShadow != null && otherShadow != this && !otherShadow.isMerged && !isMerged)
             {
-                // Calculate merge position
                 Vector3 mergePosition = Vector3.Lerp(
                     shadowMesh.transform.position,
                     otherShadow.shadowMesh.transform.position,
@@ -130,33 +156,58 @@ public class ShadowProjector : MonoBehaviour
         otherShadow.isMerged = true;
 
         // Visual feedback
-        shadowRenderer.material.color = new Color(0.3f, 0.3f, 0.3f, 0.8f); // Darker merged shadow
-        otherShadow.shadowRenderer.material.color = new Color(0.3f, 0.3f, 0.3f, 0.8f);
+        if (shadowRenderer != null && shadowRenderer.material != null)
+        {
+            shadowRenderer.material.color = new Color(0.2f, 0.2f, 0.2f, 0.9f); // Darker merged shadow
+        }
+
+        if (otherShadow.shadowRenderer != null && otherShadow.shadowRenderer.material != null)
+        {
+            otherShadow.shadowRenderer.material.color = new Color(0.2f, 0.2f, 0.2f, 0.9f);
+        }
 
         // Effects
         ParticleManager.Instance?.PlayShadowMerge(mergePosition);
         AudioManager.Instance?.PlayShadowMerge();
 
         // Analytics
-        AnalyticsTracker.TrackShadowMerge(GameManager.Instance.currentLevel, 1);
+        if (GameManager.Instance != null)
+        {
+            AnalyticsTracker.TrackShadowMerge(GameManager.Instance.currentLevel, 1);
+        }
 
-        Debug.Log($"Shadows merged between {gameObject.name} and {otherShadow.gameObject.name}!");
+        // اضافه کردن کومبو برای ادغام سایه
+        ComboSystem.Instance?.AddShadowMerge();
+
+        Debug.Log($"✨ سایه‌ها ادغام شدند: {gameObject.name} + {otherShadow.gameObject.name}");
     }
 
     public bool IsPointInShadow(Vector3 point)
     {
         if (shadowMesh == null || shadowRenderer == null) return false;
 
+        // تحمل بیشتر برای تشخیص سایه
         Bounds shadowBounds = shadowRenderer.bounds;
-        shadowBounds.Expand(0.2f); // Small tolerance
+        shadowBounds.Expand(0.3f); // Increased tolerance
         return shadowBounds.Contains(point);
     }
 
     public bool IsMerged() => isMerged;
 
+    // بهبود سایه برای قطره آب
+    public float GetShadowStrength(Vector3 point)
+    {
+        if (!IsPointInShadow(point) || shadowMesh == null) return 0f;
+
+        Vector3 localPoint = shadowMesh.transform.InverseTransformPoint(point);
+        float distanceFromCenter = Vector3.Distance(localPoint, Vector3.zero);
+        float maxDistance = shadowLength * 0.5f;
+
+        return Mathf.Clamp01(1f - (distanceFromCenter / maxDistance));
+    }
+
     void OnDrawGizmosSelected()
     {
-        // Draw shadow bounds in editor
         if (shadowMesh != null)
         {
             Gizmos.color = isMerged ? Color.red : Color.blue;

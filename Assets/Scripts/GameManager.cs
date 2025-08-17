@@ -9,6 +9,10 @@ public class GameManager : MonoBehaviour
     public float levelTime = 40f;
     public int currentLevel = 1;
 
+    [Header("Game Flow")]
+    public float startDelay = 3f; // تاخیر شروع بازی
+    public bool showCountdown = true;
+
     [Header("References")]
     public WaterDrop waterDrop;
     public SunController sunController;
@@ -17,7 +21,8 @@ public class GameManager : MonoBehaviour
 
     private float currentWater = 100f;
     private float currentTime;
-    private bool gameActive = true;
+    private bool gameActive = false; // شروع با false
+    private bool gameStarted = false;
     private float levelStartTime;
 
     public static GameManager Instance { get; private set; }
@@ -42,46 +47,96 @@ public class GameManager : MonoBehaviour
         // آنالیتیکس شروع مرحله
         AnalyticsTracker.TrackLevelStart(currentLevel);
 
+        StartCoroutine(StartGameSequence());
+    }
+
+    IEnumerator StartGameSequence()
+    {
+        // نمایش شمارش معکوس
+        if (showCountdown && uiManager != null)
+        {
+            for (int i = 3; i > 0; i--)
+            {
+                uiManager.ShowCountdown(i.ToString());
+                yield return new WaitForSeconds(1f);
+            }
+            uiManager.ShowCountdown("GO!");
+            yield return new WaitForSeconds(0.5f);
+            uiManager.HideCountdown();
+        }
+        else
+        {
+            yield return new WaitForSeconds(startDelay);
+        }
+
+        // شروع بازی
+        gameActive = true;
+        gameStarted = true;
+
         StartCoroutine(GameLoop());
     }
 
     IEnumerator GameLoop()
     {
-        bool wasInShadowLastFrame = waterDrop.IsInShadow();
+        bool wasInShadowLastFrame = waterDrop != null ? waterDrop.IsInShadow() : false;
 
         while (gameActive && currentTime > 0 && currentWater > 0)
         {
-            currentTime -= Time.deltaTime;
-
-            // Water decay based on if player is in shadow
-            bool inShadowNow = waterDrop.IsInShadow();
-            float decayRate = inShadowNow ? waterDecayRate : sunlightDecayRate;
-            currentWater -= decayRate * Time.deltaTime;
-
-            // افکت تبخیر وقتی از سایه خارج می‌شود
-            if (wasInShadowLastFrame && !inShadowNow)
+            if (gameStarted) // فقط وقتی بازی شروع شده باشه
             {
-                ParticleManager.Instance?.PlayEvaporation(waterDrop.transform.position);
-                AudioManager.Instance?.PlayEvaporation();
-            }
+                currentTime -= Time.deltaTime;
 
-            wasInShadowLastFrame = inShadowNow;
+                // بررسی وضعیت سایه
+                bool inShadowNow = waterDrop != null ? waterDrop.IsInShadow() : false;
 
-            // Update UI
-            uiManager.UpdateWaterBar(currentWater / 100f);
-            uiManager.UpdateTimer(currentTime);
-            uiManager.UpdateSunPosition(sunController.GetCurrentAngle());
+                // محاسبه قدرت سایه برای کم کردن تدریجی
+                float shadowStrength = GetShadowStrength();
+                float decayRate = Mathf.Lerp(sunlightDecayRate, waterDecayRate, shadowStrength);
 
-            // Check win condition
-            if (Vector3.Distance(waterDrop.transform.position, levelEndPoint.position) < 1f)
-            {
-                WinLevel();
-                yield break;
+                currentWater -= decayRate * Time.deltaTime;
+
+                // افکت تبخیر وقتی از سایه خارج می‌شود
+                if (wasInShadowLastFrame && !inShadowNow)
+                {
+                    if (waterDrop != null)
+                    {
+                        ParticleManager.Instance?.PlayEvaporation(waterDrop.transform.position);
+                        AudioManager.Instance?.PlayEvaporation();
+
+                        // کمی لرزش دوربین
+                        CameraController cam = FindObjectOfType<CameraController>();
+                        cam?.ShakeCamera();
+                    }
+                }
+
+                wasInShadowLastFrame = inShadowNow;
+
+                // بروزرسانی UI
+                if (uiManager != null)
+                {
+                    uiManager.UpdateWaterBar(currentWater / 100f);
+                    uiManager.UpdateTimer(currentTime);
+                    if (sunController != null)
+                    {
+                        uiManager.UpdateSunPosition(sunController.GetCurrentAngle());
+                    }
+                }
+
+                // بررسی شرایط برد
+                if (waterDrop != null && levelEndPoint != null)
+                {
+                    if (Vector3.Distance(waterDrop.transform.position, levelEndPoint.position) < 1f)
+                    {
+                        WinLevel();
+                        yield break;
+                    }
+                }
             }
 
             yield return null;
         }
 
+        // بررسی شرایط باخت
         if (currentWater <= 0)
         {
             LoseLevel("no_water");
@@ -92,20 +147,38 @@ public class GameManager : MonoBehaviour
         }
     }
 
+    // محاسبه قدرت سایه برای کم کردن تدریجی
+    float GetShadowStrength()
+    {
+        if (waterDrop == null) return 0f;
+
+        ShadowProjector currentShadow = waterDrop.GetCurrentShadow();
+        if (currentShadow == null) return 0f;
+
+        return currentShadow.GetShadowStrength(waterDrop.transform.position);
+    }
+
     void WinLevel()
     {
         gameActive = false;
         float completionTime = Time.time - levelStartTime;
 
         // Effects & Audio
-        ParticleManager.Instance?.PlayWinEffect(waterDrop.transform.position);
+        if (waterDrop != null)
+        {
+            ParticleManager.Instance?.PlayWinEffect(waterDrop.transform.position);
+        }
         AudioManager.Instance?.PlayWin();
 
         // Progress tracking
         LevelProgressTracker.Instance?.CompleteLevel(completionTime, currentWater);
 
-        uiManager.ShowWinScreen();
-        Debug.Log($"Level Won in {completionTime:F1}s with {currentWater:F0}% water!");
+        if (uiManager != null)
+        {
+            uiManager.ShowWinScreen();
+        }
+
+        Debug.Log($"🎉 مرحله برنده شد در {completionTime:F1} ثانیه با {currentWater:F0}% آب!");
     }
 
     void LoseLevel(string reason)
@@ -115,8 +188,13 @@ public class GameManager : MonoBehaviour
         AudioManager.Instance?.PlayLose();
         AnalyticsTracker.TrackLevelFail(currentLevel, reason);
 
-        uiManager.ShowLoseScreen();
-        Debug.Log($"Level Lost: {reason}");
+        if (uiManager != null)
+        {
+            uiManager.ShowLoseScreen();
+        }
+
+        string reasonText = reason == "no_water" ? "آب تمام شد" : "زمان تمام شد";
+        Debug.Log($"😞 مرحله باخت: {reasonText}");
     }
 
     public void AddWater(float amount)
@@ -127,17 +205,71 @@ public class GameManager : MonoBehaviour
         CameraController cam = FindObjectOfType<CameraController>();
         cam?.ShakeCamera();
 
-        ParticleManager.Instance?.PlayWaterCollect(waterDrop.transform.position);
+        if (waterDrop != null)
+        {
+            ParticleManager.Instance?.PlayWaterCollect(waterDrop.transform.position);
+        }
         AudioManager.Instance?.PlayWaterCollect();
 
-        Debug.Log($"Water collected! Current: {currentWater:F0}%");
+        Debug.Log($"💧 آب جمع شد! فعلی: {currentWater:F0}%");
     }
 
     public void RestartLevel()
     {
-        UnityEngine.SceneManagement.SceneManager.LoadScene(UnityEngine.SceneManagement.SceneManager.GetActiveScene().name);
+        UnityEngine.SceneManagement.SceneManager.LoadScene(
+            UnityEngine.SceneManagement.SceneManager.GetActiveScene().name
+        );
+    }
+
+    // جمع آوری آب خودکار (ایده جدید)
+    public void CollectNearbyWater()
+    {
+        if (waterDrop == null) return;
+
+        WaterPickup[] pickups = FindObjectsOfType<WaterPickup>();
+        foreach (var pickup in pickups)
+        {
+            float distance = Vector3.Distance(waterDrop.transform.position, pickup.transform.position);
+            if (distance < 2f) // جمع آوری خودکار در فاصله 2 متری
+            {
+                AddWater(pickup.waterAmount * 0.5f); // نصف مقدار
+                ParticleManager.Instance?.PlayWaterCollect(pickup.transform.position);
+                Destroy(pickup.gameObject);
+            }
+        }
     }
 
     public float GetWaterPercentage() => currentWater / 100f;
     public float GetTimeRemaining() => currentTime;
+    public bool IsGameActive() => gameActive;
+    public bool IsGameStarted() => gameStarted;
+
+    void Update()
+    {
+        // جمع آوری خودکار آب (هر 2 ثانیه یکبار)
+        if (gameActive && Time.time % 2f < 0.1f)
+        {
+            CollectNearbyWater();
+        }
+
+        // بررسی تغییر سایه برای کومبو
+        CheckShadowJumps();
+    }
+
+    private ShadowProjector lastShadow;
+    void CheckShadowJumps()
+    {
+        if (waterDrop == null) return;
+
+        ShadowProjector currentShadow = waterDrop.GetCurrentShadow();
+
+        // اگر از سایه‌ای به سایه دیگر پرید
+        if (currentShadow != null && lastShadow != null &&
+            currentShadow != lastShadow && waterDrop.IsInShadow())
+        {
+            ComboSystem.Instance?.AddShadowJump();
+        }
+
+        lastShadow = currentShadow;
+    }
 }
