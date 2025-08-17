@@ -6,7 +6,7 @@ public class WaterPickup : MonoBehaviour
     public float waterAmount = 20f;
     public float bobSpeed = 2f;
     public float bobHeight = 0.3f;
-    public ParticleSystem pickupEffect;
+    //public ParticleSystem pickupEffect;
 
     private Vector3 startPosition;
     private bool collected = false;
@@ -39,11 +39,11 @@ public class WaterPickup : MonoBehaviour
             // اضافه کردن آب به بازیکن
             GameManager.Instance?.AddWater(waterAmount);
 
-            // افکت
-            if (pickupEffect != null)
-            {
-                Instantiate(pickupEffect, transform.position, Quaternion.identity);
-            }
+            // // افکت
+            // if (pickupEffect != null)
+            // {
+            //     Instantiate(pickupEffect, transform.position, Quaternion.identity);
+            // }
 
             // صدا (اختیاری)
             AudioSource.PlayClipAtPoint(Resources.Load<AudioClip>("WaterPickup"), transform.position);

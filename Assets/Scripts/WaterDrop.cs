@@ -65,6 +65,8 @@ public class WaterDrop : MonoBehaviour
 
     void MoveToTarget()
     {
+        if (!GameManager.Instance.IsGameStarted())
+            return;
         Vector3 direction = (targetPosition - transform.position).normalized;
         float distanceToTarget = Vector3.Distance(transform.position, targetPosition);
 

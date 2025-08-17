@@ -1,4 +1,4 @@
-// QuickSetup.cs - اسکریپت راه‌اندازی کامل Last Drop (URP Compatible)
+// QuickSetup.cs - اسکریپت راه‌اندازی کامل Last Drop (Fixed UI)
 using UnityEngine;
 using UnityEngine.UI;
 #if UNITY_EDITOR
@@ -11,7 +11,7 @@ public class QuickSetupFixed : MonoBehaviour
     [MenuItem("Last Drop/Fixed Quick Setup Scene")]
     public static void SetupScene()
     {
-        Debug.Log("🚀 شروع راه‌اندازی Last Drop (URP Version)...");
+        Debug.Log("🚀 شروع راه‌اندازی Last Drop (Fixed Version)...");
 
         // پاک کردن صحنه
         ClearScene();
@@ -32,7 +32,7 @@ public class QuickSetupFixed : MonoBehaviour
         CreateCompleteUI();
 
         Debug.Log("🎉 Last Drop راه‌اندازی کامل شد!");
-        Debug.Log("✨ ویژگی‌ها: URP Shaders, Complete UI, Enhanced Systems");
+        Debug.Log("✨ ویژگی‌ها: Fixed UI Components, Enhanced Systems");
         Debug.Log("🎮 برای تست دکمه Play را بزنید!");
     }
 
@@ -449,16 +449,19 @@ public class QuickSetupFixed : MonoBehaviour
         return canvasObj;
     }
 
+    // FIXED: Water Bar UI Creation - اصلاح مشکل RectTransform
     static GameObject CreateWaterBarUI(GameObject canvas)
     {
         // پنل پس‌زمینه
         GameObject panelObj = new GameObject("WaterBarPanel");
         panelObj.transform.SetParent(canvas.transform, false);
 
+        // اضافه کردن RectTransform به صورت صریح
+        RectTransform panelRect = panelObj.AddComponent<RectTransform>();
+
         Image panelImage = panelObj.AddComponent<Image>();
         panelImage.color = new Color(0, 0, 0, 0.3f);
 
-        RectTransform panelRect = panelObj.GetComponent<RectTransform>();
         panelRect.anchorMin = new Vector2(0.02f, 0.02f);
         panelRect.anchorMax = new Vector2(0.52f, 0.18f);
         panelRect.offsetMin = Vector2.zero;
@@ -467,6 +470,7 @@ public class QuickSetupFixed : MonoBehaviour
         // برچسب آب
         GameObject labelObj = new GameObject("WaterLabel");
         labelObj.transform.SetParent(panelObj.transform, false);
+        RectTransform labelRect = labelObj.AddComponent<RectTransform>(); // اضافه کردن RectTransform
 
         Text labelText = labelObj.AddComponent<Text>();
         labelText.text = "💧 آب";
@@ -475,18 +479,18 @@ public class QuickSetupFixed : MonoBehaviour
         labelText.color = Color.white;
         labelText.alignment = TextAnchor.MiddleLeft;
 
-        RectTransform labelRect = labelObj.GetComponent<RectTransform>();
         labelRect.anchorMin = new Vector2(0.05f, 0.7f);
         labelRect.anchorMax = new Vector2(0.95f, 0.95f);
         labelRect.offsetMin = Vector2.zero;
         labelRect.offsetMax = Vector2.zero;
 
-        // Slider آب
+        // Slider آب - اصلاح کامل
         GameObject sliderObj = new GameObject("WaterSlider");
         sliderObj.transform.SetParent(panelObj.transform, false);
+        RectTransform sliderRect = sliderObj.AddComponent<RectTransform>(); // اضافه کردن RectTransform
 
         Slider slider = sliderObj.AddComponent<Slider>();
-        RectTransform sliderRect = sliderObj.GetComponent<RectTransform>();
+
         sliderRect.anchorMin = new Vector2(0.05f, 0.15f);
         sliderRect.anchorMax = new Vector2(0.95f, 0.65f);
         sliderRect.offsetMin = Vector2.zero;
@@ -495,23 +499,27 @@ public class QuickSetupFixed : MonoBehaviour
         // پس‌زمینه Slider
         GameObject bgObj = new GameObject("Background");
         bgObj.transform.SetParent(sliderObj.transform, false);
+        RectTransform bgRect = bgObj.AddComponent<RectTransform>(); // اضافه کردن RectTransform
         Image bgImage = bgObj.AddComponent<Image>();
         bgImage.color = new Color(0.1f, 0.1f, 0.1f, 0.8f);
-        SetFullRect(bgObj.GetComponent<RectTransform>());
+        SetFullRect(bgRect);
 
-        // Fill Area
+        // Fill Area - اصلاح مشکل اصلی
         GameObject fillAreaObj = new GameObject("Fill Area");
         fillAreaObj.transform.SetParent(sliderObj.transform, false);
-        SetFullRect(fillAreaObj.GetComponent<RectTransform>());
+        RectTransform fillAreaRect = fillAreaObj.AddComponent<RectTransform>(); // اضافه کردن RectTransform
+        SetFullRect(fillAreaRect);
 
         // Fill
         GameObject fillObj = new GameObject("Fill");
         fillObj.transform.SetParent(fillAreaObj.transform, false);
+        RectTransform fillRect = fillObj.AddComponent<RectTransform>(); // اضافه کردن RectTransform
         Image fillImage = fillObj.AddComponent<Image>();
         fillImage.color = new Color(0.1f, 0.7f, 1f, 0.9f);
-        SetFullRect(fillObj.GetComponent<RectTransform>());
+        SetFullRect(fillRect);
 
-        slider.fillRect = fillObj.GetComponent<RectTransform>();
+        // اتصال Slider components
+        slider.fillRect = fillRect;
         slider.value = 1f;
 
         return panelObj;
@@ -522,11 +530,11 @@ public class QuickSetupFixed : MonoBehaviour
         // پنل تایمر
         GameObject timerPanelObj = new GameObject("TimerPanel");
         timerPanelObj.transform.SetParent(canvas.transform, false);
+        RectTransform panelRect = timerPanelObj.AddComponent<RectTransform>(); // اضافه کردن RectTransform
 
         Image panelImage = timerPanelObj.AddComponent<Image>();
         panelImage.color = new Color(0, 0, 0, 0.4f);
 
-        RectTransform panelRect = timerPanelObj.GetComponent<RectTransform>();
         panelRect.anchorMin = new Vector2(0.35f, 0.8f);
         panelRect.anchorMax = new Vector2(0.65f, 0.98f);
         panelRect.offsetMin = Vector2.zero;
@@ -535,6 +543,7 @@ public class QuickSetupFixed : MonoBehaviour
         // آیکون ساعت
         GameObject iconObj = new GameObject("TimerIcon");
         iconObj.transform.SetParent(timerPanelObj.transform, false);
+        RectTransform iconRect = iconObj.AddComponent<RectTransform>(); // اضافه کردن RectTransform
 
         Text iconText = iconObj.AddComponent<Text>();
         iconText.text = "⏰";
@@ -543,7 +552,6 @@ public class QuickSetupFixed : MonoBehaviour
         iconText.color = Color.yellow;
         iconText.alignment = TextAnchor.MiddleCenter;
 
-        RectTransform iconRect = iconObj.GetComponent<RectTransform>();
         iconRect.anchorMin = new Vector2(0.05f, 0.1f);
         iconRect.anchorMax = new Vector2(0.35f, 0.9f);
         iconRect.offsetMin = Vector2.zero;
@@ -552,6 +560,7 @@ public class QuickSetupFixed : MonoBehaviour
         // متن تایمر
         GameObject timerTextObj = new GameObject("TimerText");
         timerTextObj.transform.SetParent(timerPanelObj.transform, false);
+        RectTransform textRect = timerTextObj.AddComponent<RectTransform>(); // اضافه کردن RectTransform
 
         Text timerText = timerTextObj.AddComponent<Text>();
         timerText.text = "60";
@@ -565,7 +574,6 @@ public class QuickSetupFixed : MonoBehaviour
         outline.effectColor = Color.black;
         outline.effectDistance = new Vector2(3, -3);
 
-        RectTransform textRect = timerTextObj.GetComponent<RectTransform>();
         textRect.anchorMin = new Vector2(0.4f, 0.1f);
         textRect.anchorMax = new Vector2(0.95f, 0.9f);
         textRect.offsetMin = Vector2.zero;
@@ -578,8 +586,8 @@ public class QuickSetupFixed : MonoBehaviour
     {
         GameObject sunSystemObj = new GameObject("SunSystem");
         sunSystemObj.transform.SetParent(canvas.transform, false);
+        RectTransform sunRect = sunSystemObj.AddComponent<RectTransform>(); // اضافه کردن RectTransform
 
-        RectTransform sunRect = sunSystemObj.GetComponent<RectTransform>();
         sunRect.anchorMin = new Vector2(0.55f, 0.8f);
         sunRect.anchorMax = new Vector2(0.98f, 0.98f);
         sunRect.offsetMin = Vector2.zero;
@@ -588,17 +596,18 @@ public class QuickSetupFixed : MonoBehaviour
         // پس‌زمینه مسیر
         GameObject pathBgObj = new GameObject("PathBackground");
         pathBgObj.transform.SetParent(sunSystemObj.transform, false);
+        RectTransform pathBgRect = pathBgObj.AddComponent<RectTransform>(); // اضافه کردن RectTransform
         Image pathBgImage = pathBgObj.AddComponent<Image>();
         pathBgImage.color = new Color(0, 0, 0, 0.3f);
-        SetFullRect(pathBgObj.GetComponent<RectTransform>());
+        SetFullRect(pathBgRect);
 
         // مسیر خورشید
         GameObject pathObj = new GameObject("SunPath");
         pathObj.transform.SetParent(sunSystemObj.transform, false);
+        RectTransform pathRect = pathObj.AddComponent<RectTransform>(); // اضافه کردن RectTransform
         Image pathImage = pathObj.AddComponent<Image>();
         pathImage.color = new Color(1f, 1f, 0.3f, 0.6f);
 
-        RectTransform pathRect = pathObj.GetComponent<RectTransform>();
         pathRect.anchorMin = new Vector2(0.05f, 0.3f);
         pathRect.anchorMax = new Vector2(0.95f, 0.7f);
         pathRect.offsetMin = Vector2.zero;
@@ -607,6 +616,7 @@ public class QuickSetupFixed : MonoBehaviour
         // آیکون خورشید
         GameObject sunIconObj = new GameObject("SunIcon");
         sunIconObj.transform.SetParent(sunSystemObj.transform, false);
+        RectTransform iconRect = sunIconObj.AddComponent<RectTransform>(); // اضافه کردن RectTransform
 
         Text sunText = sunIconObj.AddComponent<Text>();
         sunText.text = "☀️";
@@ -614,7 +624,6 @@ public class QuickSetupFixed : MonoBehaviour
         sunText.fontSize = 50;
         sunText.alignment = TextAnchor.MiddleCenter;
 
-        RectTransform iconRect = sunIconObj.GetComponent<RectTransform>();
         iconRect.anchorMin = new Vector2(0.45f, 0.4f);
         iconRect.anchorMax = new Vector2(0.55f, 0.6f);
         iconRect.sizeDelta = new Vector2(80, 80);
@@ -622,6 +631,7 @@ public class QuickSetupFixed : MonoBehaviour
         // برچسب
         GameObject labelObj = new GameObject("SunLabel");
         labelObj.transform.SetParent(sunSystemObj.transform, false);
+        RectTransform labelRect = labelObj.AddComponent<RectTransform>(); // اضافه کردن RectTransform
 
         Text labelText = labelObj.AddComponent<Text>();
         labelText.text = "☀️ موقعیت خورشید";
@@ -630,7 +640,6 @@ public class QuickSetupFixed : MonoBehaviour
         labelText.color = Color.white;
         labelText.alignment = TextAnchor.MiddleCenter;
 
-        RectTransform labelRect = labelObj.GetComponent<RectTransform>();
         labelRect.anchorMin = new Vector2(0, 0.05f);
         labelRect.anchorMax = new Vector2(1, 0.25f);
         labelRect.offsetMin = Vector2.zero;
@@ -643,14 +652,16 @@ public class QuickSetupFixed : MonoBehaviour
     {
         GameObject winScreenObj = new GameObject("WinScreen");
         winScreenObj.transform.SetParent(canvas.transform, false);
+        RectTransform winRect = winScreenObj.AddComponent<RectTransform>(); // اضافه کردن RectTransform
 
         Image screenImage = winScreenObj.AddComponent<Image>();
         screenImage.color = new Color(0, 0.5f, 0, 0.9f);
-        SetFullRect(winScreenObj.GetComponent<RectTransform>());
+        SetFullRect(winRect);
 
         // متن برد
         GameObject winTextObj = new GameObject("WinText");
         winTextObj.transform.SetParent(winScreenObj.transform, false);
+        RectTransform winTextRect = winTextObj.AddComponent<RectTransform>(); // اضافه کردن RectTransform
 
         Text winText = winTextObj.AddComponent<Text>();
         winText.text = "🎉 برنده شدی! 🎉";
@@ -664,7 +675,6 @@ public class QuickSetupFixed : MonoBehaviour
         outline.effectColor = Color.black;
         outline.effectDistance = new Vector2(5, -5);
 
-        RectTransform winTextRect = winTextObj.GetComponent<RectTransform>();
         winTextRect.anchorMin = new Vector2(0.1f, 0.6f);
         winTextRect.anchorMax = new Vector2(0.9f, 0.9f);
         winTextRect.offsetMin = Vector2.zero;
@@ -681,14 +691,16 @@ public class QuickSetupFixed : MonoBehaviour
     {
         GameObject loseScreenObj = new GameObject("LoseScreen");
         loseScreenObj.transform.SetParent(canvas.transform, false);
+        RectTransform loseRect = loseScreenObj.AddComponent<RectTransform>(); // اضافه کردن RectTransform
 
         Image screenImage = loseScreenObj.AddComponent<Image>();
         screenImage.color = new Color(0.5f, 0, 0, 0.9f);
-        SetFullRect(loseScreenObj.GetComponent<RectTransform>());
+        SetFullRect(loseRect);
 
         // متن باخت
         GameObject loseTextObj = new GameObject("LoseText");
         loseTextObj.transform.SetParent(loseScreenObj.transform, false);
+        RectTransform loseTextRect = loseTextObj.AddComponent<RectTransform>(); // اضافه کردن RectTransform
 
         Text loseText = loseTextObj.AddComponent<Text>();
         loseText.text = "😞 دوباره تلاش کن 😞";
@@ -702,7 +714,6 @@ public class QuickSetupFixed : MonoBehaviour
         outline.effectColor = Color.black;
         outline.effectDistance = new Vector2(5, -5);
 
-        RectTransform loseTextRect = loseTextObj.GetComponent<RectTransform>();
         loseTextRect.anchorMin = new Vector2(0.1f, 0.6f);
         loseTextRect.anchorMax = new Vector2(0.9f, 0.9f);
         loseTextRect.offsetMin = Vector2.zero;
@@ -719,6 +730,7 @@ public class QuickSetupFixed : MonoBehaviour
     {
         GameObject buttonObj = new GameObject("RestartButton");
         buttonObj.transform.SetParent(parent.transform, false);
+        RectTransform buttonRect = buttonObj.AddComponent<RectTransform>(); // اضافه کردن RectTransform
 
         Image buttonImage = buttonObj.AddComponent<Image>();
         buttonImage.color = new Color(0.2f, 0.2f, 0.2f, 0.9f);
@@ -731,7 +743,6 @@ public class QuickSetupFixed : MonoBehaviour
         colors.pressedColor = new Color(0.1f, 0.1f, 0.1f, 0.9f);
         button.colors = colors;
 
-        RectTransform buttonRect = buttonObj.GetComponent<RectTransform>();
         buttonRect.anchorMin = new Vector2(0.3f, 0.2f);
         buttonRect.anchorMax = new Vector2(0.7f, 0.4f);
         buttonRect.offsetMin = Vector2.zero;
@@ -740,6 +751,7 @@ public class QuickSetupFixed : MonoBehaviour
         // متن دکمه
         GameObject buttonTextObj = new GameObject("ButtonText");
         buttonTextObj.transform.SetParent(buttonObj.transform, false);
+        RectTransform btnTextRect = buttonTextObj.AddComponent<RectTransform>(); // اضافه کردن RectTransform
 
         Text btnText = buttonTextObj.AddComponent<Text>();
         btnText.text = "🔄 شروع مجدد";
@@ -749,21 +761,23 @@ public class QuickSetupFixed : MonoBehaviour
         btnText.alignment = TextAnchor.MiddleCenter;
         btnText.fontStyle = FontStyle.Bold;
 
-        SetFullRect(buttonTextObj.GetComponent<RectTransform>());
+        SetFullRect(btnTextRect);
     }
 
     static GameObject CreateCountdownUI(GameObject canvas)
     {
         GameObject countdownObj = new GameObject("CountdownPanel");
         countdownObj.transform.SetParent(canvas.transform, false);
+        RectTransform countdownRect = countdownObj.AddComponent<RectTransform>(); // اضافه کردن RectTransform
 
         Image panelImage = countdownObj.AddComponent<Image>();
         panelImage.color = new Color(0, 0, 0, 0.7f);
-        SetFullRect(countdownObj.GetComponent<RectTransform>());
+        SetFullRect(countdownRect);
 
         // متن شمارش معکوس
         GameObject countdownTextObj = new GameObject("CountdownText");
         countdownTextObj.transform.SetParent(countdownObj.transform, false);
+        RectTransform countdownTextRect = countdownTextObj.AddComponent<RectTransform>(); // اضافه کردن RectTransform
 
         Text countdownText = countdownTextObj.AddComponent<Text>();
         countdownText.text = "3";
@@ -777,7 +791,7 @@ public class QuickSetupFixed : MonoBehaviour
         outline.effectColor = Color.black;
         outline.effectDistance = new Vector2(8, -8);
 
-        SetFullRect(countdownTextObj.GetComponent<RectTransform>());
+        SetFullRect(countdownTextRect);
 
         countdownObj.SetActive(false);
         return countdownObj;
@@ -1048,6 +1062,7 @@ public class QuickSetupFixed : MonoBehaviour
                 {
                     uiManagerObj = new GameObject("UI_Manager");
                     uiManagerObj.transform.SetParent(canvas.transform, false);
+                    uiManagerObj.AddComponent<RectTransform>(); // اضافه کردن RectTransform
                     uiManager = uiManagerObj.AddComponent<UI_Manager>();
                     Debug.Log("✅ UI_Manager اضافه شد");
                 }

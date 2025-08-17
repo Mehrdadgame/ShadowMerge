@@ -17,9 +17,9 @@ public class UI_Manager : MonoBehaviour
     public GameObject countdownPanel;
     public Text countdownText;
 
-    [Header("Visual Effects")]
-    public Animator waterBarAnimator;
-    public ParticleSystem uiParticles;
+    // [Header("Visual Effects")]
+    // public Animator waterBarAnimator;
+    // public ParticleSystem uiParticles;
 
     private Coroutine countdownCoroutine;
 
@@ -95,14 +95,14 @@ public class UI_Manager : MonoBehaviour
             }
 
             // انیمیشن هشدار وقتی آب کم است
-            if (waterPercentage < 0.3f && waterBarAnimator != null)
-            {
-                waterBarAnimator.SetBool("LowWater", true);
-            }
-            else if (waterBarAnimator != null)
-            {
-                waterBarAnimator.SetBool("LowWater", false);
-            }
+            // if (waterPercentage < 0.3f && waterBarAnimator != null)
+            // {
+            //     waterBarAnimator.SetBool("LowWater", true);
+            // }
+            // else if (waterBarAnimator != null)
+            // {
+            //     waterBarAnimator.SetBool("LowWater", false);
+            // }
         }
     }
 
@@ -196,11 +196,11 @@ public class UI_Manager : MonoBehaviour
     {
         winScreen?.SetActive(true);
 
-        // افکت پارتیکل برد
-        if (uiParticles != null)
-        {
-            uiParticles.Play();
-        }
+        // // افکت پارتیکل برد
+        // if (uiParticles != null)
+        // {
+        //     uiParticles.Play();
+        // }
     }
 
     public void ShowLoseScreen()
